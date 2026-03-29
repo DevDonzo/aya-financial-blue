@@ -1,0 +1,328 @@
+---
+title: List all Automations
+description: Retrieve a paginated list of automations for a project with filtering options
+icon: Zap
+---
+
+## List all Automations
+
+Automations in Blue allow you to create powerful workflows that trigger actions based on specific events. This endpoint retrieves all automations configured for your project, including their triggers, actions, and current status.
+
+### Basic Example
+
+```graphql
+query ListAutomations {
+  automationList {
+    items {
+      id
+      isActive
+      trigger {
+        type
+        color
+      }
+      actions {
+        type
+        color
+      }
+      createdAt
+    }
+    pageInfo {
+      totalItems
+      hasNextPage
+    }
+  }
+}
+```
+
+### Advanced Example
+
+```graphql
+query ListAutomationsAdvanced {
+  automationList(
+    filter: {
+      customFieldIds: ["field_123", "field_456"]
+    }
+    skip: 0
+    take: 50
+  ) {
+    items {
+      id
+      isActive
+      createdAt
+      updatedAt
+      
+      # Trigger details
+      trigger {
+        id
+        type
+        color
+        metadata {
+          ... on AutomationTriggerMetadataTodoOverdue {
+            incompleteOnly
+          }
+        }
+        customField {
+          id
+          name
+          type
+        }
+        customFieldOptions {
+          id
+          title
+          color
+        }
+        todoList {
+          id
+          title
+        }
+        tags {
+          id
+          title
+          color
+        }
+        assignees {
+          id
+          name
+          email
+        }
+      }
+      
+      # Action details
+      actions {
+        id
+        type
+        color
+        duedIn
+        assigneeTriggerer
+        
+        # Action-specific fields
+        customField {
+          id
+          name
+        }
+        customFieldOptions {
+          id
+          title
+        }
+        todoList {
+          id
+          title
+        }
+        tags {
+          id
+          title
+        }
+        assignees {
+          id
+          name
+        }
+        
+        # Email action metadata
+        metadata {
+          ... on AutomationActionMetadataSendEmail {
+            email {
+              subject
+              to
+              from
+              content
+            }
+          }
+          ... on AutomationActionMetadataCreateChecklist {
+            checklists {
+              title
+              checklistItems {
+                title
+                duedIn
+              }
+            }
+          }
+        }
+      }
+      
+      # Creator info
+      createdBy {
+        id
+        name
+        email
+      }
+    }
+    
+    pageInfo {
+      totalItems
+      totalPages
+      hasNextPage
+      hasPreviousPage
+    }
+    
+    totalCount
+  }
+}
+```
+
+## Input Parameters
+
+### AutomationFilterInput
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `customFieldIds` | [String] | No | Filter automations related to specific custom fields |
+
+### Pagination Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `skip` | Int | No | Number of items to skip (default: 0) |
+| `take` | Int | No | Number of items to return (default: 20) |
+
+## Response Fields
+
+### AutomationPagination
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `items` | [Automation!]! | List of automation objects |
+| `pageInfo` | PageInfo! | Pagination information |
+| `totalCount` | Int! | Total number of automations |
+
+### Automation
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | ID! | Unique identifier |
+| `trigger` | AutomationTrigger! | The event that triggers this automation |
+| `actions` | [AutomationAction!]! | Actions performed when triggered |
+| `isActive` | Boolean! | Whether the automation is currently active |
+| `createdBy` | User! | User who created the automation |
+| `project` | Project! | Project this automation belongs to |
+| `createdAt` | DateTime! | Creation timestamp |
+| `updatedAt` | DateTime! | Last update timestamp |
+
+### AutomationTrigger
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | ID! | Unique identifier |
+| `type` | AutomationTriggerType! | Type of trigger event |
+| `color` | String | Associated color (hex format) |
+| `metadata` | AutomationTriggerMetadata | Trigger-specific configuration |
+| `customField` | CustomField | Related custom field (if applicable) |
+| `customFieldOptions` | [CustomFieldOption!] | Selected options for select fields |
+| `todos` | [CustomFieldReferenceTodo!] | Referenced todos |
+| `todoList` | TodoList | Related todo list |
+| `tags` | [Tag!] | Related tags |
+| `assignees` | [User!] | Related assignees |
+
+### AutomationAction
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | ID! | Unique identifier |
+| `type` | AutomationActionType! | Type of action to perform |
+| `color` | String | Associated color (hex format) |
+| `duedIn` | Int | Days to add for due date actions |
+| `assigneeTriggerer` | String | Special assignee identifier |
+| `metadata` | AutomationActionMetadata | Action-specific configuration |
+| `customField` | CustomField | Target custom field |
+| `customFieldOptions` | [CustomFieldOption!] | Options for select fields |
+| `todoList` | TodoList | Target todo list |
+| `tags` | [Tag!] | Tags to add/remove |
+| `assignees` | [User!] | Assignees to add/remove |
+| `httpOption` | AutomationActionHttpOption | HTTP request configuration |
+
+## Trigger Types
+
+| Type | Description |
+|------|-------------|
+| `TODO_CREATED` | When a new record is created |
+| `TODO_LIST_CHANGED` | When a record moves between lists |
+| `TODO_MARKED_AS_COMPLETE` | When a record is completed |
+| `TODO_MARKED_AS_INCOMPLETE` | When a record is uncompleted |
+| `ASSIGNEE_ADDED` | When an assignee is added |
+| `ASSIGNEE_REMOVED` | When an assignee is removed |
+| `DUE_DATE_CHANGED` | When due date is modified |
+| `DUE_DATE_REMOVED` | When due date is cleared |
+| `DUE_DATE_EXPIRED` | When due date passes |
+| `TAG_ADDED` | When a tag is added |
+| `TAG_REMOVED` | When a tag is removed |
+| `CHECKLIST_ITEM_MARKED_AS_DONE` | When checklist item is completed |
+| `CHECKLIST_ITEM_MARKED_AS_UNDONE` | When checklist item is uncompleted |
+| `TODO_COPIED_OR_MOVED_FROM_OTHER_PROJECT` | When record is imported |
+| `CUSTOM_FIELD_ADDED` | When custom field value is set |
+| `CUSTOM_FIELD_REMOVED` | When custom field value is cleared |
+| `CUSTOM_FIELD_BUTTON_CLICKED` | When button field is clicked |
+| `COLOR_ADDED` | When color is applied |
+| `COLOR_REMOVED` | When color is removed |
+
+## Action Types
+
+| Type | Description |
+|------|-------------|
+| `CHANGE_TODO_LIST` | Move record to different list |
+| `MARK_AS_COMPLETE` | Complete the record |
+| `MARK_AS_INCOMPLETE` | Uncomplete the record |
+| `ADD_ASSIGNEE` | Add assignee(s) |
+| `REMOVE_ASSIGNEE` | Remove assignee(s) |
+| `ADD_ASSIGNEE_TRIGGERER` | Add user who triggered automation |
+| `CHANGE_DUE_DATE` | Set or update due date |
+| `REMOVE_DUE_DATE` | Clear due date |
+| `ADD_TAG` | Apply tag(s) |
+| `REMOVE_TAG` | Remove tag(s) |
+| `ADD_COLOR` | Apply color |
+| `REMOVE_COLOR` | Remove color |
+| `ADD_CUSTOM_FIELD` | Set custom field value |
+| `REMOVE_CUSTOM_FIELD` | Clear custom field value |
+| `CREATE_CHECKLIST` | Create new checklist |
+| `MARK_CHECKLIST_ITEM_AS_DONE` | Complete checklist items |
+| `MARK_CHECKLIST_ITEM_AS_UNDONE` | Uncomplete checklist items |
+| `COPY_TODO` | Duplicate the record |
+| `SEND_EMAIL` | Send email notification |
+| `GENERATE_PDF` | Generate PDF document |
+| `MAKE_HTTP_REQUEST` | Call external API |
+
+## Required Permissions
+
+Listing automations requires authentication and project access:
+
+| Role | Can List Automations |
+|------|---------------------|
+| `OWNER` | ✅ Yes |
+| `ADMIN` | ✅ Yes |
+| `MEMBER` | ✅ Yes |
+| `CLIENT` | ✅ Yes |
+
+All authenticated users with project access can view automations.
+
+## Error Responses
+
+### Authentication Required
+```json
+{
+  "errors": [{
+    "message": "You must be logged in",
+    "extensions": {
+      "code": "UNAUTHENTICATED"
+    }
+  }]
+}
+```
+
+### Project Not Found
+```json
+{
+  "errors": [{
+    "message": "Project not found",
+    "extensions": {
+      "code": "PROJECT_NOT_FOUND"
+    }
+  }]
+}
+```
+
+## Important Notes
+
+- **Ordering**: Automations are always returned newest first (by creation date)
+- **Project Scope**: Automations are scoped to the current project context
+- **Active Status**: Check `isActive` to determine if an automation is currently running
+- **Metadata**: Some triggers and actions have additional metadata for configuration
+- **Performance**: Use pagination for projects with many automations
+- **Filtering**: Currently only supports filtering by custom field IDs

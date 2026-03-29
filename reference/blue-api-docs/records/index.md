@@ -1,0 +1,280 @@
+---
+title: Create a Record
+description: Create a new record (todo) in Blue with optional custom fields, tags, and assignments.
+icon: Plus
+---
+
+## Create a Record
+
+The createTodo mutation allows you to create new records in Blue with comprehensive configuration options including custom fields, tags, assignments, and more. Records can be created in specific lists or automatically placed in the default list.
+
+### Basic Example
+
+Create a simple record with just a title:
+
+```graphql
+mutation CreateRecord {
+  createTodo(
+    input: {
+      title: "New Task"
+    }
+  ) {
+    id
+    title
+    position
+  }
+}
+```
+
+### Advanced Example
+
+Create a record with all available options:
+
+```graphql
+mutation CreateRecordAdvanced {
+  createTodo(
+    input: {
+      todoListId: "clm4n8qwx000008l0g4oxdqn7"
+      title: "Product Launch Planning"
+      placement: TOP
+      description: "<p>Complete product launch preparation including marketing materials and documentation.</p>"
+      startedAt: "2025-01-15T09:00:00Z"
+      duedAt: "2025-02-01T17:00:00Z"
+      notify: true
+      assigneeIds: ["user_123", "user_456"]
+      tags: [
+        { id: "tag_existing_123" }
+        { title: "Priority", color: "#ff4b4b" }
+        { title: "Marketing" }
+      ]
+      customFields: [
+        {
+          customFieldId: "cf_budget_123"
+          value: "50000 USD"
+        }
+        {
+          customFieldId: "cf_status_456"
+          value: "In Progress"
+        }
+      ]
+      checklists: [
+        {
+          title: "Pre-launch Checklist"
+          position: 1
+        }
+      ]
+    }
+  ) {
+    id
+    uid
+    title
+    position
+    startedAt
+    duedAt
+    todoList {
+      id
+      title
+    }
+    users {
+      id
+      fullName
+    }
+    tags {
+      id
+      title
+      color
+    }
+  }
+}
+```
+
+## Input Parameters
+
+### CreateTodoInput
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `todoListId` | String | No | ID of the todo list to add the record to. If not provided, uses the first todo list in the workspace |
+| `title` | String! | ✅ Yes | Title of the record (required) |
+| `position` | Float | No | Custom position in the list. If not provided, uses placement parameter |
+| `placement` | CreateTodoInputPlacement | No | Where to place the record if position is not specified (TOP or BOTTOM) |
+| `startedAt` | DateTime | No | Start date/time for the record |
+| `duedAt` | DateTime | No | Due date/time for the record |
+| `notify` | Boolean | No | Whether to send notifications for this record creation |
+| `description` | String | No | HTML description content (will be sanitized) |
+| `assigneeIds` | [String!] | No | Array of user IDs to assign to this record |
+| `checklists` | [CreateChecklistWithoutTodoInput!] | No | Array of checklists to create with the record |
+| `customFields` | [CreateTodoInputCustomField] | No | Array of custom field values |
+| `tags` | [CreateTodoTagInput!] | No | Array of tags to attach to the record |
+
+### CreateTodoInputPlacement Values
+
+| Value | Description |
+|-------|-------------|
+| `TOP` | Place at the top of the list (highest position) |
+| `BOTTOM` | Place at the bottom of the list (lowest position) |
+
+### CreateTodoTagInput
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | String | No* | ID of existing tag to connect |
+| `title` | String | No* | Title of tag (creates new if doesn't exist) |
+| `color` | String | No | Hex color for new tag (defaults to #4a9fff) |
+
+*Note: You must provide either `id` (for existing tag) OR `title` (to create/find by title)
+
+### CreateTodoInputCustomField
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `customFieldId` | String | No | ID of the custom field |
+| `value` | String | No | Value for the custom field (see format guide below) |
+
+### CreateChecklistWithoutTodoInput
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `title` | String! | ✅ Yes | Title of the checklist |
+| `position` | Float | No | Position of the checklist within the record |
+
+## Custom Field Value Formats
+
+When setting custom field values, use these formats based on field type:
+
+| Field Type | Format | Example |
+|------------|--------|---------|
+| `CHECKBOX` | "true", "1", or "checked" for checked | `"true"` |
+| `COUNTRY` | Country name or ISO code | `"United States"` or `"US"` |
+| `CURRENCY` | Amount with optional currency | `"50000 USD"` |
+| `DATE` | YYYY-MM-DD or date range | `"2025-01-15"` or `"2025-01-15,2025-01-20"` |
+| `NUMBER` | Numeric value | `"42"` |
+| `PERCENT` | Numeric value (% optional) | `"75"` or `"75%"` |
+| `RATING` | Numeric value within range | `"4"` (if max is 5) |
+| `PHONE` | International phone format | `"+1234567890"` |
+| `SELECT_SINGLE` | Custom field option ID | `"option_123"` |
+| `SELECT_MULTI` | Comma-separated option IDs | `"option_1,option_2"` |
+| `LOCATION` | Latitude,longitude | `"40.7128,-74.0060"` |
+| `EMAIL` | Valid email address | `"user@example.com"` |
+| `URL` | Valid URL | `"https://example.com"` |
+| `TEXT` | Plain text value | `"Any text content"` |
+
+## Response Fields
+
+The mutation returns a Todo object with comprehensive record details:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | String! | Unique identifier for the record |
+| `uid` | String! | Alternative unique identifier |
+| `title` | String! | Record title |
+| `position` | Float! | Position in the list |
+| `done` | Boolean! | Completion status |
+| `startedAt` | DateTime | Start date/time |
+| `duedAt` | DateTime | Due date/time |
+| `todoList` | TodoList | Associated todo list details |
+| `users` | [User!] | Assigned users |
+| `tags` | [Tag!] | Associated tags |
+| `checklists` | [Checklist!] | Associated checklists |
+| `customFields` | [CustomFieldValue!] | Custom field values |
+
+## Required Permissions
+
+Users must have appropriate workspace access to create records:
+
+| Access Level | Can Create Records |
+|--------------|-------------------|
+| `OWNER` | ✅ Yes |
+| `ADMIN` | ✅ Yes |
+| `MEMBER` | ✅ Yes |
+| `CLIENT` | ✅ Yes |
+| `COMMENT_ONLY` | ❌ No |
+| `VIEW_ONLY` | ❌ No |
+
+The mutation requires the user's workspace access level to be `OWNER`, `ADMIN`, `MEMBER`, or `CLIENT`. Users with `VIEW_ONLY` or `COMMENT_ONLY` roles cannot create records.
+
+## Error Responses
+
+### WorkspaceNotFoundError
+```json
+{
+  "errors": [{
+    "message": "Project was not found.",
+    "extensions": {
+      "code": "PROJECT_NOT_FOUND"
+    }
+  }]
+}
+```
+**When**: No workspace context is available for the user.
+
+### TodoListCreateTodoLimitError
+```json
+{
+  "errors": [{
+    "message": "Todo list has reached the maximum number of todos.",
+    "extensions": {
+      "code": "TODO_LIST_CREATE_TODO_LIMIT_ERROR"
+    }
+  }]
+}
+```
+**When**: The todo list already contains 100,000 records (maximum limit).
+
+### TodoListNotFoundError
+```json
+{
+  "errors": [{
+    "message": "Todo list was not found.",
+    "extensions": {
+      "code": "TODO_LIST_NOT_FOUND"
+    }
+  }]
+}
+```
+**When**: The specified `todoListId` doesn't exist or user lacks access.
+
+### CustomFieldValueParseError
+```json
+{
+  "errors": [{
+    "message": "Invalid phone number format",
+    "extensions": {
+      "code": "CUSTOM_FIELD_VALUE_PARSE_ERROR"
+    }
+  }]
+}
+```
+**When**: Custom field value fails validation (e.g., invalid phone, rating out of range).
+
+## Important Notes
+
+### Performance
+- Each todo list can contain up to **100,000 records**
+- Creating records triggers multiple background processes (webhooks, automations, search indexing)
+- Batch operations are more efficient than creating records one at a time
+
+### Business Logic
+- **Position Handling**: Default position is 65535.0 when neither `position` nor `placement` specified
+- **Date Logic**:
+  - If only `duedAt` is provided, `startedAt` is set to beginning of that day
+  - If only `startedAt` is provided, `duedAt` is set to the same value
+- **Tag Creation**: New tags are automatically created if they don't exist with the specified title/color
+- **List Selection**: If no `todoListId` provided, the first todo list in the workspace is used
+
+### Side Effects
+Creating a record triggers:
+- Activity log entry creation
+- Webhook notifications
+- Search index updates
+- Automation rule execution (if configured)
+- Email/push notifications (if `notify: true`)
+- Formula and time duration custom field calculations
+- Analytics and chart updates
+
+### Related Endpoints
+- **List Records**: Query todos to retrieve existing records
+- **Update Record**: Use updateTodo mutation to modify records
+- **List Custom Fields**: Query to get available custom field IDs
+- **List Tags**: Query to get existing tag IDs
+- **List Todo Lists**: Query to get available todo list IDs

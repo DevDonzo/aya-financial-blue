@@ -1,0 +1,415 @@
+---
+title: Making Requests
+description: Blue API uses GraphQL to provide a flexible and efficient way to interact with our API.
+icon: Send
+---
+
+## Reading Data
+You can copy and paste the following code curl command into your terminal to get started: .
+
+
+
+```bash
+curl -X POST https://api.blue.cc/graphql \
+  -H "Content-Type: application/json" \
+  -H "X-Bloo-Token-ID: your-token-id" \
+  -H "X-Bloo-Token-Secret: your-token-secret" \
+  -H "X-Bloo-Company-ID: your-company-id" \
+  -d '{
+    "query": "query ProjectListQuery { projectList(filter: { companyIds: [\"your-company-id\"] }) { items {name} } }"
+  }'
+```
+Or try our Python or Node examples.
+
+### Python
+```python
+import requests
+
+url = "https://api.blue.cc/graphql"
+
+headers = {
+    "Content-Type": "application/json",
+    "X-Bloo-Token-ID": "your-token-id",
+    "X-Bloo-Token-Secret": "your-token-secret",
+    "X-Bloo-Company-ID": "your-company-id"
+}
+
+data = {
+    "query": """query ProjectListQuery { projectList(filter: { companyIds: ["your-company-id"] }) { items {name} } }"""
+}
+
+response = requests.post(url, json=data, headers=headers)
+
+print(response.json())  # To see the response
+```
+### NodeJS
+```javascript
+const axios = require('axios');
+
+const url = 'https://api.blue.cc/graphql';
+
+const headers = {
+  'Content-Type': 'application/json',
+  'X-Bloo-Token-ID': 'your-token-id',
+  'X-Bloo-Token-Secret': 'your-token-secret',
+  'X-Bloo-Company-ID': 'your-company-id'
+};
+
+const data = {
+  query: `query ProjectListQuery { projectList(filter: { companyIds: ["your-company-id"] }) { items {name} } }`
+};
+
+axios.post(url, data, { headers })
+  .then(response => {
+    console.log(response.data); // To see the response
+  })
+  .catch(error => {
+    console.error('Error:', error);
+  });
+
+```
+
+
+Now that you have made your first request, let's analyze the response. This code will return the names of the projects that you have access to in your company. The Blue API returns back data in standard JSON format that can easily be parsed by any programming language.
+
+```json
+{
+  "data": {
+    "projectList": {
+      "items": [
+        {"name": "Website Redesign"},
+        {"name": "Customer Relationship Management (CRM)"},
+        {"name": "Marketing Campaigns"},
+        {"name": "Product Roadmap"},
+        {"name": "Social Media Strategy"},
+        {"name": "Client Onboarding"},
+        {"name": "Sales Pipeline Management"},
+        {"name": "Employee Training Program"},
+        {"name": "Financial Planning and Budgeting"},
+        {"name": "Content Creation and Blogging"},
+        {"name": "SEO Improvements"},
+        {"name": "Customer Feedback and Support"},
+        {"name": "Product Feature Development"},
+        {"name": "Internal Communication Tools"},
+        {"name": "Inventory Management"},
+        {"name": "Event Planning and Coordination"},
+        {"name": "Business Growth Strategies"},
+        {"name": "New Product Launch"},
+        {"name": "Legal and Compliance"},
+        {"name": "Performance Tracking and Reporting"}
+      ]
+    }
+  }
+}
+```
+
+You can add more fields to the query to get more information about the projects, such as id and the last time it was updated. 
+
+If we update the query like this:
+
+```graphql
+{ items {name, id, updatedAt} } 
+```
+
+You will receive a JSON response with the requested data in this format:
+
+```json
+{
+  "data": {
+    "projectList": {
+      "items": [
+        {"id": "proj1", "name": "Website Redesign", "updatedAt": "2024-08-01T12:34:56.789Z"},
+        {"id": "proj2", "name": "Customer Relationship Management (CRM)", "updatedAt": "2024-07-15T09:21:34.567Z"},
+        {"id": "proj3", "name": "Marketing Campaigns", "updatedAt": "2024-06-10T14:45:23.456Z"},
+        {"id": "proj4", "name": "Product Roadmap", "updatedAt": "2024-09-05T08:15:45.678Z"},
+        {"id": "proj5", "name": "Social Media Strategy", "updatedAt": "2024-03-20T10:11:12.345Z"},
+        {"id": "proj6", "name": "Client Onboarding", "updatedAt": "2024-02-28T16:33:22.456Z"},
+        {"id": "proj7", "name": "Sales Pipeline Management", "updatedAt": "2024-04-12T19:40:11.567Z"},
+        {"id": "proj8", "name": "Employee Training Program", "updatedAt": "2024-05-23T22:59:30.123Z"},
+        {"id": "proj9", "name": "Financial Planning and Budgeting", "updatedAt": "2024-01-17T07:08:09.678Z"},
+        {"id": "proj10", "name": "Content Creation and Blogging", "updatedAt": "2024-02-14T15:42:37.456Z"},
+        {"id": "proj11", "name": "SEO Improvements", "updatedAt": "2024-03-01T12:00:00.123Z"},
+        {"id": "proj12", "name": "Customer Feedback and Support", "updatedAt": "2024-04-18T14:30:45.789Z"},
+        {"id": "proj13", "name": "Product Feature Development", "updatedAt": "2024-05-05T17:20:31.987Z"},
+        {"id": "proj14", "name": "Internal Communication Tools", "updatedAt": "2024-06-25T09:55:44.210Z"},
+        {"id": "proj15", "name": "Inventory Management", "updatedAt": "2024-07-11T03:23:54.321Z"},
+        {"id": "proj16", "name": "Event Planning and Coordination", "updatedAt": "2024-08-19T13:37:22.876Z"},
+        {"id": "proj17", "name": "Business Growth Strategies", "updatedAt": "2024-09-07T11:45:33.654Z"},
+        {"id": "proj18", "name": "New Product Launch", "updatedAt": "2024-09-10T08:20:14.987Z"},
+        {"id": "proj19", "name": "Legal and Compliance", "updatedAt": "2024-03-13T10:05:27.456Z"},
+        {"id": "proj20", "name": "Performance Tracking and Reporting", "updatedAt": "2024-06-01T14:23:45.678Z"}
+      ]
+    }
+  }
+}
+```
+
+## Writing Data
+
+This is an example of how to create a new record in Blue using the Blue API.
+
+
+```bash
+curl -X POST https://api.blue.cc/graphql \
+  -H "Content-Type: application/json" \
+  -H "X-Bloo-Token-ID: YOUR_TOKEN_ID" \
+  -H "X-Bloo-Token-Secret: YOUR_TOKEN_SECRET" \
+  -H "X-Bloo-Company-ID: YOUR_COMPANY_ID" \
+  --data-raw '{
+    "query": "mutation CreateRecord { createTodo(input: { todoListId: \"TODOLISTID\", title: \"Test\", position: 65535 }) { id title position } }"
+  }'
+```
+
+### Python
+
+```python
+import requests
+
+url = "https://api.blue.cc/graphql"
+
+headers = {
+    "Content-Type": "application/json",
+    "X-Bloo-Token-ID": "YOUR_TOKEN_ID",
+    "X-Bloo-Token-Secret": "YOUR_TOKEN_SECRET",
+    "X-Bloo-Company-ID": "YOUR_COMPANY_ID"
+}
+
+data = {
+    "query": """mutation CreateRecord { createTodo(input: { todoListId: "TODOLISTID", title: "Test", position: 65535 }) { id title position } }"""
+}
+
+response = requests.post(url, json=data, headers=headers)
+
+print(response.json())  # To see the response
+```
+
+### NodeJS
+
+```javascript
+const axios = require('axios');
+
+const url = 'https://api.blue.cc/graphql';
+
+const headers = {
+  'Content-Type': 'application/json',
+  'X-Bloo-Token-ID': 'YOUR_TOKEN_ID',
+  'X-Bloo-Token-Secret': 'YOUR_TOKEN_SECRET',
+  'X-Bloo-Company-ID': 'YOUR_COMPANY_ID'
+};
+
+const data = {
+  query: `mutation CreateRecord { createTodo(input: { todoListId: "TODOLISTID", title: "Test", position: 65535 }) { id title position } }`
+};
+
+axios.post(url, data, { headers })
+  .then(response => {
+    console.log(response.data); // To see the response
+  })
+  .catch(error => {
+    console.error('Error:', error);
+  });
+```
+
+
+And here is an example of how to delete a record in Blue using the Blue API.
+
+#
+
+```bash
+curl -X POST https://api.blue.cc/graphql \
+  -H "Content-Type: application/json" \
+  -H "X-Bloo-Token-ID: YOUR_TOKEN_ID" \
+  -H "X-Bloo-Token-Secret: YOUR_TOKEN_SECRET" \
+  -H "X-Bloo-Company-ID: YOUR_COMPANY_ID" \
+  --data-raw '{
+    "query": "mutation DeleteARecord { deleteTodo(input: { todoId: \"ENTER_RECORD_ID\" }) { success } }"
+  }'
+```
+
+### Python
+
+```python
+import requests
+
+url = "https://api.blue.cc/graphql"
+
+headers = {
+    "Content-Type": "application/json",
+    "X-Bloo-Token-ID": "YOUR_TOKEN_ID",
+    "X-Bloo-Token-Secret": "YOUR_TOKEN_SECRET",
+    "X-Bloo-Company-ID": "YOUR_COMPANY_ID"
+}
+
+data = {
+    "query": """mutation DeleteARecord { deleteTodo(input: { todoId: "ENTER_RECORD_ID" }) { success } }"""
+}
+
+response = requests.post(url, json=data, headers=headers)
+
+print(response.json())  # To see the response
+```
+
+### NodeJS
+
+```javascript
+const axios = require('axios');
+
+const url = 'https://api.blue.cc/graphql';
+
+const headers = {
+  'Content-Type': 'application/json',
+  'X-Bloo-Token-ID': 'YOUR_TOKEN_ID',
+  'X-Bloo-Token-Secret': 'YOUR_TOKEN_SECRET',
+  'X-Bloo-Company-ID': 'YOUR_COMPANY_ID'
+};
+
+const data = {
+  query: `mutation DeleteARecord { deleteTodo(input: { todoId: "ENTER_RECORD_ID" }) { success } }`
+};
+
+axios.post(url, data, { headers })
+  .then(response => {
+    console.log(response.data); // To see the response
+  })
+  .catch(error => {
+    console.error('Error:', error);
+  });
+```
+
+## Subscriptions
+
+With GraphQL subscriptions, you can receive real-time updates when data changes. This is useful for live activity feeds, real-time collaboration, or keeping your local data synchronized with the server.
+
+Blue uses the `graphql-ws` protocol for WebSocket subscriptions. Here's an example using the `subscribeToActivity` subscription to receive real-time activity updates:
+
+```javascript
+import { createClient } from 'graphql-ws';
+
+const client = createClient({
+  url: 'wss://api.blue.cc/graphql',
+  connectionParams: {
+    Authorization: 'Bearer YOUR_ACCESS_TOKEN'
+  }
+});
+
+// Subscribe to activity updates
+const unsubscribe = client.subscribe(
+  {
+    query: `
+      subscription ActivityUpdates($companyId: String!, $projectId: String) {
+        subscribeToActivity(companyId: $companyId, projectId: $projectId) {
+          mutation
+          node {
+            id
+            action
+            description
+            createdAt
+            user {
+              name
+              email
+            }
+          }
+        }
+      }
+    `,
+    variables: {
+      companyId: 'your-company-id',
+      projectId: null // Optional: filter by specific project
+    }
+  },
+  {
+    next: (data) => console.log('Activity update:', data),
+    error: (err) => console.error('Error:', err),
+    complete: () => console.log('Subscription complete')
+  }
+);
+
+// Later: unsubscribe when done
+// unsubscribe();
+```
+
+This subscription will receive real-time updates whenever:
+- New activities are created in your company/project
+- Existing activities are updated
+- Activities are deleted
+
+The `mutation` field indicates the type of change: `CREATED`, `UPDATED`, or `DELETED`.
+
+## Error Handling
+
+The Blue API returns errors in a standard GraphQL format. Here are common error responses you might encounter:
+
+### Authentication Error
+When your token is invalid or missing:
+
+```json
+{
+  "errors": [{
+    "message": "Unauthorized",
+    "extensions": {
+      "code": "UNAUTHENTICATED"
+    }
+  }]
+}
+```
+
+### Not Found Error
+When requesting a resource that doesn't exist:
+
+```json
+{
+  "errors": [{
+    "message": "Project not found",
+    "extensions": {
+      "code": "NOT_FOUND"
+    }
+  }]
+}
+```
+
+### Validation Error
+When input parameters are invalid:
+
+```json
+{
+  "errors": [{
+    "message": "Validation error",
+    "extensions": {
+      "code": "BAD_USER_INPUT",
+      "validationErrors": {
+        "title": ["Title is required"]
+      }
+    }
+  }]
+}
+```
+
+### Permission Error
+When you don't have access to perform an operation:
+
+```json
+{
+  "errors": [{
+    "message": "You do not have permission to perform this action",
+    "extensions": {
+      "code": "FORBIDDEN"
+    }
+  }]
+}
+```
+
+### Rate Limit Error
+When you exceed the API rate limits:
+
+```json
+{
+  "errors": [{
+    "message": "Too many requests, please slow down",
+    "extensions": {
+      "code": "TOO_MANY_REQUESTS"
+    }
+  }]
+}
+```
+
+Always check for the `errors` array in the response before processing `data`. If `errors` is present, the operation failed and `data` may be null.

@@ -1,0 +1,95 @@
+# `StatusUpdateScalarWhereInput`
+
+- Kind: `INPUT_OBJECT`
+
+## Input Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `id` | `ID` | `` |  |
+| `id_not` | `ID` | `` |  |
+| `id_in` | `[ID!]` | `` |  |
+| `id_not_in` | `[ID!]` | `` |  |
+| `id_lt` | `ID` | `` |  |
+| `id_lte` | `ID` | `` |  |
+| `id_gt` | `ID` | `` |  |
+| `id_gte` | `ID` | `` |  |
+| `id_contains` | `ID` | `` |  |
+| `id_not_contains` | `ID` | `` |  |
+| `id_starts_with` | `ID` | `` |  |
+| `id_not_starts_with` | `ID` | `` |  |
+| `id_ends_with` | `ID` | `` |  |
+| `id_not_ends_with` | `ID` | `` |  |
+| `uid` | `String` | `` |  |
+| `uid_not` | `String` | `` |  |
+| `uid_in` | `[String!]` | `` |  |
+| `uid_not_in` | `[String!]` | `` |  |
+| `uid_lt` | `String` | `` |  |
+| `uid_lte` | `String` | `` |  |
+| `uid_gt` | `String` | `` |  |
+| `uid_gte` | `String` | `` |  |
+| `uid_contains` | `String` | `` |  |
+| `uid_not_contains` | `String` | `` |  |
+| `uid_starts_with` | `String` | `` |  |
+| `uid_not_starts_with` | `String` | `` |  |
+| `uid_ends_with` | `String` | `` |  |
+| `uid_not_ends_with` | `String` | `` |  |
+| `html` | `String` | `` |  |
+| `html_not` | `String` | `` |  |
+| `html_in` | `[String!]` | `` |  |
+| `html_not_in` | `[String!]` | `` |  |
+| `html_lt` | `String` | `` |  |
+| `html_lte` | `String` | `` |  |
+| `html_gt` | `String` | `` |  |
+| `html_gte` | `String` | `` |  |
+| `html_contains` | `String` | `` |  |
+| `html_not_contains` | `String` | `` |  |
+| `html_starts_with` | `String` | `` |  |
+| `html_not_starts_with` | `String` | `` |  |
+| `html_ends_with` | `String` | `` |  |
+| `html_not_ends_with` | `String` | `` |  |
+| `text` | `String` | `` |  |
+| `text_not` | `String` | `` |  |
+| `text_in` | `[String!]` | `` |  |
+| `text_not_in` | `[String!]` | `` |  |
+| `text_lt` | `String` | `` |  |
+| `text_lte` | `String` | `` |  |
+| `text_gt` | `String` | `` |  |
+| `text_gte` | `String` | `` |  |
+| `text_contains` | `String` | `` |  |
+| `text_not_contains` | `String` | `` |  |
+| `text_starts_with` | `String` | `` |  |
+| `text_not_starts_with` | `String` | `` |  |
+| `text_ends_with` | `String` | `` |  |
+| `text_not_ends_with` | `String` | `` |  |
+| `date` | `DateTime` | `` |  |
+| `date_not` | `DateTime` | `` |  |
+| `date_in` | `[DateTime!]` | `` |  |
+| `date_not_in` | `[DateTime!]` | `` |  |
+| `date_lt` | `DateTime` | `` |  |
+| `date_lte` | `DateTime` | `` |  |
+| `date_gt` | `DateTime` | `` |  |
+| `date_gte` | `DateTime` | `` |  |
+| `category` | `StatusUpdateCategory` | `` |  |
+| `category_not` | `StatusUpdateCategory` | `` |  |
+| `category_in` | `[StatusUpdateCategory!]` | `` |  |
+| `category_not_in` | `[StatusUpdateCategory!]` | `` |  |
+| `createdAt` | `DateTime` | `` |  |
+| `createdAt_not` | `DateTime` | `` |  |
+| `createdAt_in` | `[DateTime!]` | `` |  |
+| `createdAt_not_in` | `[DateTime!]` | `` |  |
+| `createdAt_lt` | `DateTime` | `` |  |
+| `createdAt_lte` | `DateTime` | `` |  |
+| `createdAt_gt` | `DateTime` | `` |  |
+| `createdAt_gte` | `DateTime` | `` |  |
+| `updatedAt` | `DateTime` | `` |  |
+| `updatedAt_not` | `DateTime` | `` |  |
+| `updatedAt_in` | `[DateTime!]` | `` |  |
+| `updatedAt_not_in` | `[DateTime!]` | `` |  |
+| `updatedAt_lt` | `DateTime` | `` |  |
+| `updatedAt_lte` | `DateTime` | `` |  |
+| `updatedAt_gt` | `DateTime` | `` |  |
+| `updatedAt_gte` | `DateTime` | `` |  |
+| `AND` | `[StatusUpdateScalarWhereInput!]` | `` |  |
+| `OR` | `[StatusUpdateScalarWhereInput!]` | `` |  |
+| `NOT` | `[StatusUpdateScalarWhereInput!]` | `` |  |

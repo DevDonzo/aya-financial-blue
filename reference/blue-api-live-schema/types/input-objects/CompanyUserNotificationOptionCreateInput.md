@@ -1,0 +1,14 @@
+# `CompanyUserNotificationOptionCreateInput`
+
+- Kind: `INPUT_OBJECT`
+
+## Input Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `id` | `ID` | `` |  |
+| `uid` | `String!` | `` |  |
+| `companyUser` | `CompanyUserCreateOneWithoutCompanyUserNotificationOptionsInput!` | `` |  |
+| `notificationOption` | `NotificationOptionCreateOneWithoutCompanyUserNotificationOptionInput!` | `` |  |
+| `allowEmail` | `Boolean!` | `` |  |
+| `allowPush` | `Boolean!` | `` |  |

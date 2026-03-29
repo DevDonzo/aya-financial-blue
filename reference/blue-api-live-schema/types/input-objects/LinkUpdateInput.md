@@ -1,0 +1,16 @@
+# `LinkUpdateInput`
+
+- Kind: `INPUT_OBJECT`
+
+## Input Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `uid` | `String` | `` |  |
+| `title` | `String` | `` |  |
+| `url` | `String` | `` |  |
+| `position` | `Float` | `` |  |
+| `membersOnly` | `Boolean` | `` |  |
+| `createdBy` | `UserUpdateOneRequiredWithoutLinksInput` | `` |  |
+| `company` | `CompanyUpdateOneRequiredWithoutLinksInput` | `` |  |
+| `description` | `String` | `` |  |

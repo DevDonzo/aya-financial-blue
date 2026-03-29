@@ -1,0 +1,144 @@
+version: 1.3.6
+
+cache: true
+
+interface:
+  customWelcome: |
+    Aya Financial Ops Chat
+
+    Ask Aya naturally:
+    - what am I working on
+    - show comments for John Smith
+    - move Sheraz to underwriting
+    - create a new lead named john smith phone 4165550123 email john@example.com amount 275000
+  fileSearch: false
+  privacyPolicy:
+    externalUrl: 'https://www.ayafinancial.com/privacy'
+    openNewTab: true
+  termsOfService:
+    externalUrl: 'https://www.ayafinancial.com/terms'
+    openNewTab: true
+    modalAcceptance: true
+    modalTitle: 'Aya Financial Internal Use Terms'
+    modalContent: |
+      This system is for authorized Aya Financial personnel only.
+
+      Client data, operational data, and internal conversations may be logged,
+      reviewed, and retained for security, compliance, and service improvement.
+
+      Do not paste secrets, credentials, or information unrelated to Aya work.
+  endpointsMenu: false
+  modelSelect: false
+  parameters: false
+  sidePanel: true
+  presets: false
+  prompts:
+    use: false
+    create: false
+    share: false
+    public: false
+  bookmarks: false
+  multiConvo: true
+  agents:
+    use: false
+    create: false
+    share: false
+    public: false
+  peoplePicker:
+    users: false
+    groups: false
+    roles: false
+  marketplace:
+    use: false
+  runCode: false
+  webSearch: false
+  temporaryChatRetention: 168
+  mcpServers:
+    use: true
+    create: false
+    share: false
+    public: false
+    trustCheckbox:
+      label:
+        en: 'I understand and want to continue'
+      subLabel:
+        en: |
+          Aya-approved MCP servers can access internal operational tools. Only use trusted Aya-managed servers and do not enter credentials unless the server is company-approved.
+
+registration:
+  socialLogins:
+    - 'openid'
+  allowedDomains:
+    - 'ayafinancial.com'
+
+actions:
+  allowedDomains:
+    - 'librechat.ai'
+
+mcpSettings:
+  allowedDomains:
+    - 'aya-api'
+    - 'aya.internal'
+    - 'ops.ayafinancial.com'
+
+modelSpecs:
+  enforce: true
+  prioritize: true
+  list:
+    - name: 'aya-ops-assistant'
+      label: 'Aya Ops Assistant'
+      description: 'Use Aya tools for client search, workflow status, daily activity, comments, and stage moves in the Blue workspace exposed through Aya.'
+      default: true
+      preset:
+        endpoint: 'openAI'
+        model: 'gpt-4.1-mini'
+        instructions: |
+          You are Aya Financial's internal operations assistant.
+
+          Speak like an experienced operations coworker helping brokers and staff.
+          Assume the user is non-technical unless they explicitly ask a technical question.
+          Never mention MCP, tools, functions, function names, JSON, schemas, endpoints, APIs, or internal implementation details unless the user explicitly asks.
+          When a user asks what you can do, answer in plain business language with relevant examples, not internal capability names.
+
+          Always prefer the Aya MCP tools when the user asks about:
+          - clients, records, comments, stages, assignments, or activity
+          - what an employee worked on
+          - recent comments or context before a call
+          - moving a client to another stage
+          - adding a note or comment
+          - creating a new lead or client
+
+          Do not make up CRM data. Use the Aya tools to look things up.
+          Keep responses concise, direct, and operational.
+          Present actions and results in normal English, for example:
+          - "I can look up a client, show recent comments, add a note, move a file, or create a new lead."
+          - not "I can call aya_search_clients_mcp_aya_ops."
+          For quick CRM tasks, prefer brief answers over long explanations.
+          If the request is ambiguous, ask one short clarifying question instead of guessing.
+          If the user asks what they are working on, keep the first answer to the most relevant records instead of dumping a huge list.
+          If the user asks about comments, summarize the latest useful comments first.
+          When creating a new lead or client:
+          - prefer the `aya_create_client_record` tool over free-form answers
+          - extract and pass explicit `firstName` and `lastName` when possible
+          - if the employee types the name in lowercase, convert it to normal human name casing
+          - keep email addresses lowercase
+          - normalize phone numbers when possible
+          - normalize obvious amount shorthand like 275k to 275000 when possible
+          - do not invent purchase price, down payment, or other missing financial fields
+          - if the name split is unclear, ask one short clarifying question
+      authType: 'user_provided'
+      mcpServers:
+        - 'aya_ops'
+
+mcpServers:
+  aya_ops:
+    type: streamable-http
+    url: http://aya-api:3010/mcp
+    chatMenu: false
+    startup: true
+    timeout: 90000
+    serverInstructions: |
+      Aya Ops tools are the approved path for internal workflow lookups and CRM actions. Prefer Aya tools over unsupported free-form answers about internal data. For new lead creation, prefer explicit firstName and lastName arguments, normalize human names even if the user typed lowercase, normalize obvious amount shorthand, and ask a short follow-up instead of guessing when the split is ambiguous.
+    headers:
+      x-aya-employee-email: '{{LIBRECHAT_USER_EMAIL}}'
+      x-aya-employee-name: '{{LIBRECHAT_USER_NAME}}'

@@ -1,0 +1,185 @@
+---
+title: Update Record
+description: Learn how to update record details and custom fields using the Blue API.
+icon: FileEdit
+---
+
+## Update Record Details
+
+To update a record's core properties, use the `editTodo` mutation:
+
+```graphql
+mutation UpdateRecordDetails {
+  editTodo(
+    input: {
+      todoId: "YOUR RECORD ID"
+      todoListId: "RECORD LIST ID TO MOVE THE RECORD TO"
+      position: "NEW RECORD POSITION IN NUMBER"
+      title: "NEW RECORD TITLE"
+      html: "NEW RECORD DESCRIPTION IN HTML (MUST MATCH TEXT)"
+      text: "NEW RECORD DESCRIPTION IN TEXT (MUST MATCH HTML)"
+      startedAt: "NEW RECORD DUE DATE (START)"
+      duedAt: "NEW RECORD DUE DATE (END)"
+      color: "RECORD COLOR CODE"
+    }
+  ) {
+    id
+    title
+    position
+    html
+    text
+    color
+  }
+}
+```
+
+### Input Field Reference
+| Field | Type | Description |
+|-------|------|-------------|
+| todoId | String | (Required) The ID of the record to update |
+| todoListId | String | New list ID if moving the record |
+| position | Float | New position in the list |
+| title | String | Updated record title |
+| html/text | String | Updated description (must match in both fields) |
+| startedAt/duedAt | DateTime | Updated start/end dates in ISO 8601 format |
+| color | String | Color code from available options |
+
+### Color Options
+```json
+// Light theme colors
+["#ffc2d4", "#ed8285", "#ffb55e", "#ffe885", "#ccf07d", 
+ "#91e38c", "#a1f7fa", "#91cfff", "#c29ee0", "#e8bd91"]
+
+// Dark theme colors  
+["#ff8ebe", "#ff4b4b", "#ff9e4b", "#ffdc6b", "#b4e051",
+ "#66d37e", "#4fd2ff", "#4a9fff", "#a17ee8", "#e89e64"]
+```
+
+## Update Custom Fields
+To update custom field values, use the `setTodoCustomField` mutation with field-specific parameters:
+
+### Text-based Fields
+```graphql
+mutation {
+  setTodoCustomField(
+    input: {
+      customFieldId: "YOUR CUSTOM FIELD ID"
+      todoId: "YOUR RECORD ID"
+      text: "VALUE"
+    }
+  )
+}
+```
+Applies to: `TEXT_SINGLE`, `TEXT_MULTI`, `URL`, `EMAIL`
+
+### Numeric Fields  
+```graphql
+mutation {
+  setTodoCustomField(
+    input: {
+      customFieldId: "YOUR CUSTOM FIELD ID"
+      todoId: "YOUR RECORD ID" 
+      number: "NUMERIC_VALUE"
+    }
+  )
+}
+```
+Applies to: `NUMBER`, `PERCENT`, `RATING`
+
+### Selection Fields
+```graphql
+mutation {
+  setTodoCustomField(
+    input: {
+      customFieldId: "YOUR CUSTOM FIELD ID"
+      todoId: "YOUR RECORD ID"
+      customFieldOptionIds: ["OPTION_ID_1", "OPTION_ID_2"]
+    }
+  )
+}
+```
+Applies to: `SELECT_SINGLE`, `SELECT_MULTI`
+
+### Specialized Fields
+**Phone Numbers:**
+```graphql
+mutation {
+  setTodoCustomField(
+    input: {
+      customFieldId: "YOUR CUSTOM FIELD ID"
+      todoId: "YOUR RECORD ID"
+      text: "+33642526644"
+      regionCode: "FR"
+    }
+  )
+}
+```
+
+**Countries:**
+```graphql
+mutation {
+  setTodoCustomField(
+    input: {
+      customFieldId: "YOUR CUSTOM FIELD ID"
+      todoId: "YOUR RECORD ID"
+      countryCodes: ["AF", "AL", "DZ"]
+      text: "Afghanistan, Albania, Algeria"
+    }
+  )
+}
+```
+
+**Location:**
+```graphql
+mutation {
+  setTodoCustomField(
+    input: {
+      customFieldId: "YOUR CUSTOM FIELD ID"
+      todoId: "YOUR RECORD ID"
+      latitude: 42.2923323
+      longitude: 12.126621199999999
+      text: "Via Cassia, Querce d'Orlando, Capranica, Italy"
+    }
+  )
+}
+```
+
+**Checkbox:**
+```graphql
+mutation {
+  setTodoCustomField(
+    input: {
+      customFieldId: "YOUR CUSTOM FIELD ID"
+      todoId: "YOUR RECORD ID"
+      checked: true
+    }
+  )
+}
+```
+
+## Required Permissions
+
+Users must have appropriate project access to update records:
+
+| Access Level | Can Update Records |
+|--------------|-------------------|
+| `OWNER` | ✅ Yes |
+| `ADMIN` | ✅ Yes |
+| `MEMBER` | ✅ Yes |
+| `CLIENT` | ✅ Yes |
+| `COMMENT_ONLY` | ❌ No |
+| `VIEW_ONLY` | ❌ No |
+
+Additional custom field permissions may apply for `setTodoCustomField` based on role configuration.
+
+## Return Values
+
+- `editTodo` returns the complete updated `Todo` object
+- `setTodoCustomField` returns `Boolean!` indicating success
+
+### Notes
+1. Custom field IDs can be found using the [list custom fields](/api/custom-fields/list-custom-fields) query
+2. Phone numbers must be in E.164 format when using the API directly
+3. Location fields are best managed through the Blue app interface
+4. The `html` and `text` fields are automatically synchronized when `html` is provided
+5. All update operations trigger activity logging and webhook notifications

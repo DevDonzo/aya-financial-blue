@@ -1,0 +1,413 @@
+import crypto from "node:crypto";
+
+import { config } from "../../../config.js";
+import {
+  createId,
+  ensureEmployee,
+  insertActivityEvent,
+  listBlueWebhookSubscriptions,
+  softDeleteBlueRecordById,
+  upsertBlueListsCache,
+  upsertBlueRecordsCache,
+  upsertBlueSyncState,
+  upsertBlueWebhookSubscription,
+  upsertIdentityLink,
+} from "../../../db.js";
+import { ValidationError, AuthError } from "../../../app/errors.js";
+import { webhookEnvelopeSchema } from "../../../types/api.js";
+import { fetchRecordDetail, createOrUpdateWebhook } from "../graphql/client.js";
+import type { BlueWebhookEventType } from "../../../types/blue.js";
+
+const supportedEvents: BlueWebhookEventType[] = [
+  "TODO_CREATED",
+  "TODO_DELETED",
+  "TODO_MOVED",
+  "TODO_NAME_CHANGED",
+  "TODO_DONE_STATUS_UPDATED",
+  "TODO_ASSIGNEE_ADDED",
+  "TODO_ASSIGNEE_REMOVED",
+  "TODO_TAG_ADDED",
+  "TODO_TAG_REMOVED",
+  "TODO_CUSTOM_FIELD_UPDATED",
+  "COMMENT_CREATED",
+  "COMMENT_UPDATED",
+  "COMMENT_DELETED",
+];
+
+export async function verifyAndProcessBlueWebhook(input: {
+  rawBody: string;
+  signature?: string | string[];
+}) {
+  const signature = Array.isArray(input.signature)
+    ? input.signature[0]
+    : input.signature;
+  const secret = config.BLUE_WEBHOOK_SECRET;
+  if (!secret) {
+    throw new AuthError("BLUE_WEBHOOK_SECRET is not configured");
+  }
+
+  const hashBuffer = crypto
+    .createHmac("sha256", secret)
+    .update(input.rawBody)
+    .digest();
+  const signatureBuffer = parseSignature(signature);
+  if (
+    !signatureBuffer ||
+    signatureBuffer.length !== hashBuffer.length ||
+    !crypto.timingSafeEqual(hashBuffer, signatureBuffer)
+  ) {
+    throw new AuthError("Invalid webhook signature");
+  }
+
+  const parsedEnvelope = webhookEnvelopeSchema.parse(JSON.parse(input.rawBody));
+  const payload = JSON.parse(input.rawBody) as Record<string, unknown>;
+  const eventName = parsedEnvelope.event ?? parsedEnvelope.type ?? "UNKNOWN";
+  if (eventName === "WEBHOOK_HEALTH_CHECK") {
+    return { ok: true, healthCheck: true };
+  }
+
+  const eventData = isRecord(payload.data) ? payload.data : {};
+  const eventMeta = extractWebhookMeta(eventName, eventData, payload);
+  await maybeEnsureWebhookActor(eventMeta.actor);
+
+  if (eventName.startsWith("TODO_")) {
+    await repairTodoCacheFromWebhook(eventName, eventMeta);
+  } else if (eventName.startsWith("COMMENT_")) {
+    await repairCommentCacheFromWebhook(eventMeta);
+  }
+
+  await insertActivityEvent({
+    id: createId("evt"),
+    employeeId: eventMeta.actor?.id,
+    source: "blue_webhook",
+    sourceEventId: eventMeta.eventId ?? undefined,
+    actionType: eventName,
+    entityType: eventMeta.entityType,
+    entityId: eventMeta.entityId ?? undefined,
+    entityTitle: eventMeta.entityTitle,
+    occurredAt: eventMeta.occurredAt,
+    summary: eventMeta.summary,
+    rawPayload: payload,
+  });
+
+  await upsertBlueSyncState({
+    workspaceId: config.BLUE_WORKSPACE_ID,
+    entityType: "webhooks",
+    lastWebhookEventAt: eventMeta.occurredAt,
+    lastSeenUpdatedAt: eventMeta.occurredAt,
+  });
+
+  return {
+    ok: true,
+    event: eventName,
+    entityId: eventMeta.entityId ?? undefined,
+  };
+}
+
+export async function registerBlueWebhookIfConfigured() {
+  if (!config.BLUE_WEBHOOK_PUBLIC_URL) {
+    return null;
+  }
+
+  const existing = await listBlueWebhookSubscriptions(config.BLUE_WORKSPACE_ID);
+  const existingWebhookId = existing[0]?.blue_webhook_id ?? undefined;
+
+  const { webhook, secret } = await createOrUpdateWebhook({
+    workspaceId: config.BLUE_WORKSPACE_ID,
+    url: config.BLUE_WEBHOOK_PUBLIC_URL,
+    events: supportedEvents,
+    existingWebhookId,
+  });
+
+  await upsertBlueWebhookSubscription({
+    id: createId("whsub"),
+    workspaceId: config.BLUE_WORKSPACE_ID,
+    blueWebhookId: webhook.id,
+    url: webhook.url,
+    eventsJson: JSON.stringify(webhook.events),
+    status: webhook.status,
+    secretRef: secret ?? config.BLUE_WEBHOOK_SECRET ?? null,
+    enabled: webhook.enabled,
+  });
+
+  return webhook;
+}
+
+async function repairTodoCacheFromWebhook(
+  eventName: string,
+  eventMeta: ReturnType<typeof extractWebhookMeta>,
+) {
+  if (!eventMeta.todoId) {
+    return;
+  }
+
+  if (eventName === "TODO_DELETED") {
+    await softDeleteBlueRecordById(config.BLUE_WORKSPACE_ID, eventMeta.todoId);
+    return;
+  }
+
+  await refreshRecordCache(eventMeta.todoId);
+}
+
+async function repairCommentCacheFromWebhook(
+  eventMeta: ReturnType<typeof extractWebhookMeta>,
+) {
+  if (!eventMeta.todoId) {
+    return;
+  }
+
+  await refreshRecordCache(eventMeta.todoId);
+}
+
+async function refreshRecordCache(recordId: string) {
+  const { record } = await fetchRecordDetail(config.BLUE_WORKSPACE_ID, recordId);
+  if (!record) {
+    await softDeleteBlueRecordById(config.BLUE_WORKSPACE_ID, recordId);
+    return;
+  }
+
+  await upsertBlueListsCache({
+    workspaceId: config.BLUE_WORKSPACE_ID,
+    items: [
+      {
+        id: record.todoList.id,
+        title: record.todoList.title,
+        normalizedTitle: normalizeEntityText(record.todoList.title),
+        position: record.todoList.position,
+        updatedAt: record.todoList.updatedAt,
+      },
+    ],
+  });
+
+  await upsertBlueRecordsCache({
+    workspaceId: config.BLUE_WORKSPACE_ID,
+    items: [
+      {
+        id: record.id,
+        listId: record.todoList.id,
+        listTitle: record.todoList.title,
+        title: record.title,
+        normalizedTitle: normalizeEntityText(record.title),
+        status: record.archived ? "Archived" : record.done ? "Completed" : "Active",
+        dueAt: record.duedAt ?? null,
+        updatedAt: record.updatedAt,
+        archived: record.archived,
+        done: record.done,
+        rawJson: JSON.stringify(record),
+      },
+    ],
+  });
+
+  await upsertBlueSyncState({
+    workspaceId: config.BLUE_WORKSPACE_ID,
+    entityType: "records",
+    lastIncrementalSyncAt: new Date().toISOString(),
+    lastSeenUpdatedAt: record.updatedAt,
+  });
+}
+
+async function maybeEnsureWebhookActor(
+  actor:
+    | {
+        id: string;
+        fullName?: string;
+        firstName?: string;
+        lastName?: string;
+        email?: string;
+        timezone?: string | null;
+      }
+    | null,
+) {
+  if (!actor?.id) {
+    return;
+  }
+
+  const displayName =
+    actor.fullName ||
+    [actor.firstName, actor.lastName].filter(Boolean).join(" ").trim() ||
+    actor.email ||
+    actor.id;
+
+  await ensureEmployee({
+    employeeId: actor.id,
+    displayName,
+    email: actor.email,
+    timezone: actor.timezone ?? "America/Toronto",
+  });
+
+  await upsertIdentityLink({
+    id: createId("ident"),
+    employeeId: actor.id,
+    source: "blue",
+    externalId: actor.id,
+    externalLabel: displayName,
+  });
+
+  if (actor.email) {
+    await upsertIdentityLink({
+      id: createId("ident"),
+      employeeId: actor.id,
+      source: "email",
+      externalId: actor.email,
+      externalLabel: displayName,
+    });
+  }
+}
+
+function extractWebhookMeta(
+  eventName: string,
+  data: Record<string, unknown>,
+  payload: Record<string, unknown>,
+) {
+  const actor = findNestedUser(data) ?? findNestedUser(payload) ?? null;
+  const todo = findNestedTodo(data) ?? findNestedTodo(payload);
+  const comment = findNestedComment(data) ?? findNestedComment(payload);
+  const occurredAt =
+    firstString(
+      data.updatedAt,
+      data.createdAt,
+      payload.updatedAt,
+      payload.createdAt,
+    ) ?? new Date().toISOString();
+  const eventId =
+    firstString(data.id, payload.id, comment?.id, todo?.id) ??
+    `${eventName}_${occurredAt}`;
+  const entityId = comment?.id ?? todo?.id ?? null;
+  const entityType = comment?.id
+    ? "comment"
+    : todo?.id
+      ? "record"
+      : "activity";
+  const entityTitle =
+    firstString(comment?.text, todo?.title, eventName) ?? eventName;
+  const summary =
+    firstString(
+      data.summary,
+      payload.summary,
+      comment?.text,
+      todo?.title,
+    ) ?? `${eventName} in Blue`;
+
+  return {
+    eventId,
+    occurredAt,
+    entityId,
+    entityType,
+    entityTitle,
+    summary,
+    actor,
+    todoId: todo?.id ?? comment?.todoId ?? null,
+  };
+}
+
+function findNestedUser(value: unknown) {
+  for (const candidate of findObjectCandidates(value)) {
+    const id = firstString(candidate.id, candidate.userId, candidate.createdById);
+    const email = firstString(candidate.email);
+    const fullName = firstString(candidate.fullName, candidate.name);
+    const firstName = firstString(candidate.firstName);
+    const lastName = firstString(candidate.lastName);
+    if (!id && !email && !fullName) {
+      continue;
+    }
+    return {
+      id: id ?? email ?? fullName ?? "unknown",
+      email: email ?? undefined,
+      fullName: fullName ?? undefined,
+      firstName: firstName ?? undefined,
+      lastName: lastName ?? undefined,
+      timezone: firstString(candidate.timezone) ?? null,
+    };
+  }
+  return null;
+}
+
+function findNestedTodo(value: unknown) {
+  for (const candidate of findObjectCandidates(value)) {
+    const id = firstString(candidate.todoId, candidate.id, candidate.recordId);
+    const title = firstString(candidate.title, candidate.name);
+    if (!id) {
+      continue;
+    }
+    return { id, title };
+  }
+  return null;
+}
+
+function findNestedComment(value: unknown) {
+  for (const candidate of findObjectCandidates(value)) {
+    const id = firstString(candidate.commentId, candidate.id);
+    const text = firstString(candidate.text, candidate.body, candidate.comment);
+    const todoId = firstString(candidate.todoId, candidate.categoryId, candidate.recordId);
+    if (!id && !text) {
+      continue;
+    }
+    return { id: id ?? todoId ?? "unknown", text, todoId };
+  }
+  return null;
+}
+
+function findObjectCandidates(value: unknown): Array<Record<string, unknown>> {
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  const candidates = [value];
+  const nestedKeys = [
+    "data",
+    "event",
+    "payload",
+    "todo",
+    "record",
+    "comment",
+    "user",
+    "createdBy",
+    "actor",
+  ];
+
+  for (const key of nestedKeys) {
+    const nestedValue = value[key];
+    if (isRecord(nestedValue)) {
+      candidates.push(nestedValue);
+    }
+  }
+
+  return candidates;
+}
+
+function parseSignature(signature?: string | string[]) {
+  const raw = Array.isArray(signature) ? signature[0] : signature;
+  if (!raw) {
+    return null;
+  }
+
+  const normalized = raw.startsWith("sha256=") ? raw.slice("sha256=".length) : raw;
+  if (!/^[0-9a-fA-F]+$/.test(normalized) || normalized.length % 2 !== 0) {
+    throw new ValidationError("Invalid webhook signature format");
+  }
+
+  return Buffer.from(normalized, "hex");
+}
+
+function firstString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeEntityText(input: string) {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}

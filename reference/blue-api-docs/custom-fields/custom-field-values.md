@@ -1,0 +1,337 @@
+---
+title: Set Custom Field Values
+description: Update custom field values on records using type-specific parameters for each field type
+icon: FileEdit
+---
+
+## Set Custom Field Values
+
+Custom fields extend Blue's standard record structure with business-specific data. This endpoint allows you to set or update values for any custom field on a record. Each field type requires specific parameters to ensure data integrity and proper validation.
+
+### Basic Example
+
+```graphql
+mutation SetTextFieldValue {
+  setTodoCustomField(input: {
+    todoId: "todo_abc123"
+    customFieldId: "field_xyz789"
+    text: "Project specification document"
+  })
+}
+```
+
+### Advanced Example
+
+```graphql
+mutation SetMultipleFieldTypes {
+  # Set a date range field
+  dateField: setTodoCustomField(input: {
+    todoId: "todo_abc123"
+    customFieldId: "field_date_001"
+    startDate: "2024-01-15T09:00:00Z"
+    endDate: "2024-01-31T17:00:00Z"
+    timezone: "America/New_York"
+  })
+  
+  # Set a multi-select field
+  selectField: setTodoCustomField(input: {
+    todoId: "todo_abc123"
+    customFieldId: "field_select_002"
+    customFieldOptionIds: ["option_high", "option_urgent", "option_client"]
+  })
+  
+  # Set a location field
+  locationField: setTodoCustomField(input: {
+    todoId: "todo_abc123"
+    customFieldId: "field_location_003"
+    latitude: 40.7128
+    longitude: -74.0060
+  })
+}
+```
+
+## Input Parameters
+
+### SetTodoCustomFieldInput
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `todoId` | String! | ✅ Yes | The ID of the record to update |
+| `customFieldId` | String! | ✅ Yes | The ID of the custom field |
+| `text` | String | No | For TEXT_SINGLE, TEXT_MULTI, PHONE, EMAIL, URL |
+| `number` | Float | No | For NUMBER, PERCENT, RATING |
+| `currency` | String | No | Currency code for CURRENCY type (e.g., "USD") |
+| `checked` | Boolean | No | For CHECKBOX fields |
+| `startDate` | DateTime | No | Start date for DATE fields |
+| `endDate` | DateTime | No | End date for DATE range fields |
+| `timezone` | String | No | Timezone for DATE fields (e.g., "America/New_York") |
+| `latitude` | Float | No | Latitude for LOCATION fields |
+| `longitude` | Float | No | Longitude for LOCATION fields |
+| `regionCode` | String | No | Region code for PHONE fields |
+| `countryCodes` | [String!] | No | ISO country codes for COUNTRY fields |
+| `customFieldOptionId` | String | No | Option ID for SELECT_SINGLE fields |
+| `customFieldOptionIds` | [String!] | No | Option IDs for SELECT_MULTI fields |
+| `customFieldReferenceTodoIds` | [String!] | No | Record IDs for REFERENCE fields |
+
+## Field Type Examples
+
+### Text Fields
+```graphql
+mutation {
+  setTodoCustomField(input: {
+    todoId: "todo_123"
+    customFieldId: "field_description"
+    text: "Detailed project requirements and specifications"
+  })
+}
+```
+
+### Number Fields
+```graphql
+mutation {
+  setTodoCustomField(input: {
+    todoId: "todo_123"
+    customFieldId: "field_budget"
+    number: 15000.50
+  })
+}
+```
+
+### Select Fields
+```graphql
+# Single Select
+mutation {
+  setTodoCustomField(input: {
+    todoId: "todo_123"
+    customFieldId: "field_priority"
+    customFieldOptionId: "option_high"
+  })
+}
+
+# Multi Select
+mutation {
+  setTodoCustomField(input: {
+    todoId: "todo_123"
+    customFieldId: "field_tags"
+    customFieldOptionIds: ["option_frontend", "option_urgent", "option_v2"]
+  })
+}
+```
+
+### Date Fields
+```graphql
+# Single Date
+mutation {
+  setTodoCustomField(input: {
+    todoId: "todo_123"
+    customFieldId: "field_deadline"
+    startDate: "2024-12-31T23:59:59Z"
+  })
+}
+
+# Date Range
+mutation {
+  setTodoCustomField(input: {
+    todoId: "todo_123"
+    customFieldId: "field_project_timeline"
+    startDate: "2024-01-01T00:00:00Z"
+    endDate: "2024-03-31T23:59:59Z"
+    timezone: "UTC"
+  })
+}
+```
+
+### Location Fields
+```graphql
+mutation {
+  setTodoCustomField(input: {
+    todoId: "todo_123"
+    customFieldId: "field_office_location"
+    latitude: 37.7749
+    longitude: -122.4194
+  })
+}
+```
+
+### Currency Fields
+```graphql
+mutation {
+  setTodoCustomField(input: {
+    todoId: "todo_123"
+    customFieldId: "field_invoice_amount"
+    number: 5000
+    currency: "USD"
+  })
+}
+```
+
+### File Fields
+File fields use separate mutations:
+
+```graphql
+# Add a file
+mutation {
+  createTodoCustomFieldFile(input: {
+    todoId: "todo_123"
+    customFieldId: "field_attachments"
+    fileUid: "file_upload_789"
+  })
+}
+
+# Remove a file
+mutation {
+  deleteTodoCustomFieldFile(input: {
+    todoId: "todo_123"
+    customFieldId: "field_attachments"
+    fileUid: "file_upload_789"
+  })
+}
+```
+
+## Setting Values During Record Creation
+
+You can set custom field values when creating a new record:
+
+```graphql
+mutation {
+  createTodo(input: {
+    todoListId: "list_project_123"
+    title: "New Feature Development"
+    customFields: [
+      {
+        customFieldId: "field_priority"
+        value: "high"
+      },
+      {
+        customFieldId: "field_estimate"
+        value: "8"
+      }
+    ]
+  }) {
+    id
+    customFields {
+      customField {
+        name
+      }
+      value
+    }
+  }
+}
+```
+
+## Response Fields
+
+The mutation returns a boolean indicating success:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `setTodoCustomField` | Boolean! | True if the operation succeeded |
+
+## Required Permissions
+
+Users must have permission to edit both the record and the specific custom field:
+
+| Role | Can Set Field Values |
+|------|---------------------|
+| `OWNER` | ✅ Yes |
+| `ADMIN` | ✅ Yes |
+| `MEMBER` | ✅ Yes (unless restricted by custom role) |
+| `CLIENT` | ✅ Yes (unless restricted by custom role) |
+
+For users with custom project roles, the system performs a two-tier check:
+1. First, it verifies the user has project-level access
+2. Then, it checks if the specific field is marked as `editable` in their custom role configuration
+
+This means a user might have general project access but still be restricted from editing certain fields based on their custom role.
+
+## Error Responses
+
+### Custom Field Not Found
+```json
+{
+  "errors": [{
+    "message": "Custom field was not found.",
+    "extensions": {
+      "code": "CUSTOM_FIELD_NOT_FOUND"
+    }
+  }]
+}
+```
+
+### Unauthorized Access
+```json
+{
+  "errors": [{
+    "message": "You are not authorized.",
+    "extensions": {
+      "code": "FORBIDDEN"
+    }
+  }]
+}
+```
+
+### Invalid Field Value
+```json
+{
+  "errors": [{
+    "message": "Invalid value for field type NUMBER",
+    "extensions": {
+      "code": "VALIDATION_ERROR"
+    }
+  }]
+}
+```
+
+
+## Important Notes
+
+- **Upsert Behavior**: The mutation creates a new field value if none exists, or updates the existing value
+- **Type Safety**: Only provide parameters that match the field type (e.g., don't send `text` for a NUMBER field)
+- **Side Effects**: Setting values triggers:
+  - Formula field recalculations
+  - Automation rules
+  - Webhook notifications
+  - Activity log entries
+  - Chart updates
+- **Special Behaviors**:
+  - **CURRENCY** fields automatically handle conversion calculations
+  - **REFERENCE** fields update bi-directional relationships
+  - **FORMULA** fields are read-only and cannot be set directly (they're calculated automatically)
+  - **LOOKUP** fields are read-only and cannot be set directly (they pull data from referenced records)
+  - **BUTTON** fields trigger automation events when "clicked"
+- **Validation**: The API validates that:
+  - The record exists in the project
+  - The custom field exists in the same project
+  - The user has edit permissions
+  - The value matches the field type requirements
+
+## Value Format Reference
+
+| Field Type | Parameter | Format | Example |
+|------------|-----------|--------|---------|
+| `TEXT_SINGLE` | `text` | String | `"Project Alpha"` |
+| `TEXT_MULTI` | `text` | String with newlines | `"Line 1\nLine 2"` |
+| `NUMBER` | `number` | Float | `42.5` |
+| `CURRENCY` | `number` + `currency` | Float + ISO code | `1000.00` + `"USD"` |
+| `PERCENT` | `number` | Float (0-100) | `75` |
+| `RATING` | `number` | Float (within min/max) | `4.5` |
+| `CHECKBOX` | `checked` | Boolean | `true` |
+| `DATE` | `startDate` | ISO 8601 DateTime | `"2024-01-15T00:00:00Z"` |
+| `DATE` (range) | `startDate` + `endDate` | ISO 8601 DateTimes | See example above |
+| `SELECT_SINGLE` | `customFieldOptionId` | Option ID | `"option_123"` |
+| `SELECT_MULTI` | `customFieldOptionIds` | Array of Option IDs | `["opt_1", "opt_2"]` |
+| `PHONE` | `text` | String | `"+1-555-123-4567"` |
+| `EMAIL` | `text` | String | `"user@example.com"` |
+| `URL` | `text` | String | `"https://example.com"` |
+| `LOCATION` | `latitude` + `longitude` | Floats | `40.7128, -74.0060` |
+| `COUNTRY` | `countryCodes` | ISO 3166 codes | `["US", "CA"]` |
+| `REFERENCE` | `customFieldReferenceTodoIds` | Array of record IDs | `["todo_1", "todo_2"]` |
+| `FORMULA` | N/A | Read-only - calculated automatically | N/A |
+| `LOOKUP` | N/A | Read-only - pulls from references | N/A |
+
+## Related Endpoints
+
+- [List Custom Fields](/api/custom-fields/list-custom-fields) - Get available custom fields
+- [Create Custom Field](/api/custom-fields/create-custom-fields) - Add new custom fields
+- [Get Record Details](/api/records/list-records) - Retrieve records with custom field values
+- [Bulk Update Records](/api/records/bulk-update) - Update multiple records at once

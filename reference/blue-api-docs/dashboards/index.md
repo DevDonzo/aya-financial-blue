@@ -1,0 +1,246 @@
+---
+title: List Dashboards
+description: Retrieve a paginated list of dashboards that you have access to view or modify
+category: Dashboards
+icon: ChartBar
+---
+
+## List Dashboards
+
+Retrieve dashboards that you have access to view. This includes dashboards you created and dashboards that have been shared with you.
+
+## Basic Example
+
+```graphql
+query ListDashboards {
+  dashboards(filter: { companyId: "company_123" }) {
+    items {
+      id
+      title
+      createdBy {
+        id
+        name
+        email
+      }
+      createdAt
+      updatedAt
+    }
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+  }
+}
+```
+
+## Advanced Example
+
+```graphql
+query ListDashboardsAdvanced {
+  dashboards(
+    filter: { 
+      companyId: "company_123"
+      projectId: "proj_456"  # Optional: filter by project
+    }
+    sort: [updatedAt_DESC, title_ASC]
+    skip: 0
+    take: 10
+  ) {
+    items {
+      id
+      title
+      createdBy {
+        id
+        name
+        email
+      }
+      dashboardUsers {
+        id
+        role
+        user {
+          id
+          name
+          email
+        }
+      }
+      createdAt
+      updatedAt
+    }
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+  }
+}
+```
+
+## Input Parameters
+
+### DashboardFilterInput
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `companyId` | String! | ✅ Yes | Organization ID to filter dashboards |
+| `projectId` | String | No | Optional project ID to filter dashboards |
+
+### Sorting Options
+
+| Sort Value | Description |
+|------------|-------------|
+| `title_ASC` | Sort by title ascending |
+| `title_DESC` | Sort by title descending |
+| `createdBy_ASC` | Sort by creator ascending |
+| `createdBy_DESC` | Sort by creator descending |
+| `updatedAt_ASC` | Sort by update time ascending |
+| `updatedAt_DESC` | Sort by update time descending (default) |
+
+### Pagination Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `skip` | Int | 0 | Number of items to skip |
+| `take` | Int | 20 | Number of items to return (max 100) |
+
+## Response Fields
+
+### DashboardPagination
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `items` | [Dashboard!]! | Array of dashboard objects |
+| `pageInfo` | PageInfo! | Pagination information |
+
+### Dashboard
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | ID! | Unique identifier for the dashboard |
+| `title` | String! | Display name of the dashboard |
+| `createdBy` | User! | User who created the dashboard |
+| `dashboardUsers` | [DashboardUser!] | Users with access to this dashboard |
+| `createdAt` | DateTime! | When the dashboard was created |
+| `updatedAt` | DateTime! | When the dashboard was last modified |
+
+### DashboardUser
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | ID! | Unique identifier for the dashboard user |
+| `role` | DashboardRole! | User's role (VIEWER or EDITOR) |
+| `user` | User! | User information |
+
+## Access Control
+
+### Dashboard Visibility
+You can only see dashboards where you are:
+- The creator of the dashboard
+- Explicitly granted access via dashboard sharing
+
+### Required Permissions
+- **Authentication Required**: You must be logged in
+- **Organization Access**: You must have access to the specified organization
+- **Project Access**: If filtering by project, you must have access to that project
+
+## Error Responses
+
+### Organization Not Found
+```json
+{
+  "errors": [{
+    "message": "Organization not found",
+    "extensions": {
+      "code": "COMPANY_NOT_FOUND"
+    }
+  }]
+}
+```
+
+### Project Not Found
+```json
+{
+  "errors": [{
+    "message": "Project not found", 
+    "extensions": {
+      "code": "PROJECT_NOT_FOUND"
+    }
+  }]
+}
+```
+
+## Common Use Cases
+
+### List All Organization Dashboards
+```graphql
+query CompanyDashboards {
+  dashboards(filter: { companyId: "company_123" }) {
+    items {
+      id
+      title
+      createdBy { name }
+    }
+  }
+}
+```
+
+### List Project-Specific Dashboards
+```graphql
+query ProjectDashboards {
+  dashboards(filter: { 
+    companyId: "company_123"
+    projectId: "proj_456"
+  }) {
+    items {
+      id
+      title
+    }
+  }
+}
+```
+
+### Paginated Dashboard List
+```graphql
+query PaginatedDashboards {
+  dashboards(
+    filter: { companyId: "company_123" }
+    skip: 20
+    take: 10
+  ) {
+    items {
+      id
+      title
+    }
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+    }
+  }
+}
+```
+
+## Best Practices
+
+### Performance
+- Use pagination for better performance with large dashboard lists
+- Only request fields you need in your application
+- Consider caching dashboard lists for frequently accessed data
+
+### Filtering
+- Always filter by organization to ensure proper data isolation
+- Use project filtering when working with project-specific dashboards
+- Combine filters to narrow down results efficiently
+
+### Sorting
+- Default sorting is by `updatedAt_DESC` (most recently updated first)
+- Use title sorting for alphabetical organization
+- Combine multiple sort criteria for complex ordering needs
+
+## Related Operations
+
+- [Create Dashboard](/api/dashboards/create-dashboard) - Create new dashboards
+- [Copy Dashboard](/api/dashboards/copy-dashboard) - Duplicate existing dashboards
+- [Rename Dashboard](/api/dashboards/rename-dashboard) - Rename dashboards or manage users
+- [Delete Dashboard](/api/dashboards/delete-dashboard) - Permanently remove dashboards

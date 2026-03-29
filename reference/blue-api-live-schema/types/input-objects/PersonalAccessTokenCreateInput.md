@@ -1,0 +1,16 @@
+# `PersonalAccessTokenCreateInput`
+
+- Kind: `INPUT_OBJECT`
+
+## Input Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `id` | `ID` | `` |  |
+| `uid` | `String!` | `` |  |
+| `name` | `String!` | `` |  |
+| `secret` | `String!` | `` |  |
+| `scopes` | `String` | `` |  |
+| `expiredAt` | `DateTime` | `` |  |
+| `lastUsedAt` | `DateTime` | `` |  |
+| `user` | `UserCreateOneWithoutPersonalAccessTokensInput!` | `` |  |

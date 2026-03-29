@@ -1,0 +1,14 @@
+# `ChartSegmentValueInput`
+
+- Kind: `INPUT_OBJECT`
+
+## Input Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `uid` | `String` | `` |  |
+| `title` | `String!` | `` |  |
+| `projectId` | `String!` | `` |  |
+| `customFieldId` | `String` | `` |  |
+| `function` | `ChartSegmentValueFunctions` | `` |  |
+| `filter` | `TodoFilterInput` | `` |  |

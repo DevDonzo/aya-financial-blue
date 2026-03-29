@@ -1,0 +1,182 @@
+---
+title: Delete Custom Field
+description: Remove custom fields from projects with proper cleanup and cascading effects
+icon: Trash2
+---
+
+## Delete a Custom Field
+
+Permanently removes a custom field from a project along with all associated data, values, and configurations. This operation cannot be undone and will affect all records that use this field.
+
+### Basic Example
+
+```graphql
+mutation DeleteCustomField {
+  deleteCustomField(id: "field_abc123")
+}
+```
+
+### Advanced Example
+
+```graphql
+mutation DeleteCustomFieldWithResponse {
+  deleteCustomField(id: "field_abc123")
+}
+```
+
+## Input Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | String! | ✅ Yes | The unique identifier of the custom field to delete |
+
+## Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `deleteCustomField` | Boolean! | Always returns `true` when deletion succeeds |
+
+## Required Permissions
+
+Only project owners and administrators can delete custom fields.
+
+| Role | Can Delete Custom Fields |
+|------|-------------------------|
+| `OWNER` | ✅ Yes |
+| `ADMIN` | ✅ Yes |
+| `MEMBER` | ❌ No |
+| `CLIENT` | ❌ No |
+
+## Cascading Effects
+
+When a custom field is deleted, the following cleanup operations occur automatically:
+
+### Data Cleanup
+- **Custom field values** - All values for this field are removed from all records
+- **Field options** - All dropdown options and configurations are deleted
+- **Activity history** - All activity records related to this field are removed
+- **Lookup configurations** - Any lookup field references are cleaned up
+
+### Special Handling for Button Fields
+If the deleted field is of type `BUTTON`, additional cleanup occurs:
+- **Automations** - All automations triggered by this button are deleted
+- **Automation history** - Related automation activity is removed
+
+### Real-time Updates
+- **Charts** - Project charts are marked for update to reflect the changes
+- **Formulas** - All formula fields in the project are recalculated
+- **Time tracking** - Time duration calculations are updated
+- **Subscriptions** - Real-time notifications are sent to connected clients
+- **Webhooks** - Integration webhooks are triggered with deletion events
+
+## Error Responses
+
+### Custom Field Not Found
+```json
+{
+  "errors": [{
+    "message": "Custom field was not found.",
+    "extensions": {
+      "code": "CUSTOM_FIELD_NOT_FOUND"
+    }
+  }]
+}
+```
+
+### Insufficient Permissions
+```json
+{
+  "errors": [{
+    "message": "You don't have permission to perform this action",
+    "extensions": {
+      "code": "FORBIDDEN"
+    }
+  }]
+}
+```
+
+
+## Important Notes
+
+### Permanent Deletion
+- **No undo** - Deleted custom fields cannot be recovered
+- **Data loss** - All field values across all records are permanently removed
+- **Immediate effect** - Changes take effect immediately across all project users
+
+### Performance Considerations
+- **Large projects** - Deletion may take longer in projects with many records
+- **Formula recalculation** - Projects with complex formulas may experience brief processing delays
+- **Chart updates** - Dashboard charts will refresh to reflect the changes
+
+### Best Practices
+1. **Backup data** - Export important field values before deletion
+2. **Communicate changes** - Notify team members before deleting fields
+3. **Check dependencies** - Verify no automations or formulas depend on the field
+4. **Review reports** - Update any reports that reference the deleted field
+
+### Related Operations
+- Use [List Custom Fields](/api/custom-fields/list-custom-fields) to find field IDs
+- Consider [Create Custom Field](/api/custom-fields/create-custom-fields) to recreate similar fields
+- Review [Custom Field Values](/api/custom-fields/custom-field-values) to understand data impact
+
+## Common Use Cases
+
+### Removing Unused Fields
+```graphql
+# First, list fields to identify unused ones
+query ListCustomFields {
+  customFields(projectId: "project_123") {
+    id
+    name
+    type
+    createdAt
+    # Check usage in records
+  }
+}
+
+# Then delete the unused field
+mutation DeleteUnusedField {
+  deleteCustomField(id: "field_to_remove")
+}
+```
+
+### Cleaning Up Test Fields
+```graphql
+# Remove fields created during testing
+mutation CleanupTestFields {
+  field1: deleteCustomField(id: "test_field_1")
+  field2: deleteCustomField(id: "test_field_2")
+  field3: deleteCustomField(id: "test_field_3")
+}
+```
+
+### Restructuring Project Fields
+```graphql
+# When reorganizing field structure
+mutation RestructureFields {
+  # Delete old fields
+  deleteOldPriorityField: deleteCustomField(id: "old_priority_field")
+  deleteOldStatusField: deleteCustomField(id: "old_status_field")
+  
+  # Note: Create new fields in separate mutations
+}
+```
+
+## Webhook Events
+
+When a custom field is deleted, the following webhook event is triggered:
+
+```json
+{
+  "event": "CUSTOM_FIELD_DELETED",
+  "projectId": "project_123",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "previousValue": {
+    "id": "field_abc123",
+    "name": "Priority Level",
+    "type": "SELECT_SINGLE",
+    "projectId": "project_123"
+  },
+  "currentValue": null
+}
+```

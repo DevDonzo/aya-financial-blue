@@ -1,0 +1,218 @@
+---
+title: Remove Users
+description: Remove users from projects or companies using the Blue API.
+icon: Trash2
+---
+
+## Remove Users
+
+This page covers how to remove users from projects and companies. User removal is a permanent action that unassigns the user from all records and removes their access, though their historical data is preserved for audit purposes.
+
+## Remove User from Project
+
+Remove a user from a specific project while maintaining their company access.
+
+### Basic Example
+
+```graphql
+mutation {
+  removeProjectUser(
+    input: {
+      projectId: "project-id"
+      userId: "user-id"
+    }
+  ) {
+    success
+    operationId
+  }
+}
+```
+
+### Response Example
+
+```json
+{
+  "data": {
+    "removeProjectUser": {
+      "success": true,
+      "operationId": null
+    }
+  }
+}
+```
+
+**Note:** The `operationId` field is currently not populated by this mutation and will return `null`.
+
+## Remove User from Company
+
+Remove a user from the entire company, which cascades to all projects.
+
+### Basic Example
+
+```graphql
+mutation {
+  removeCompanyUser(
+    input: {
+      companyId: "company-id"
+      userId: "user-id"
+    }
+  )
+}
+```
+
+### Response Example
+
+```json
+{
+  "data": {
+    "removeCompanyUser": true
+  }
+}
+```
+
+## Input Parameters
+
+### RemoveProjectUserInput
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `projectId` | String! | ✅ Yes | The ID of the project (not slug) |
+| `userId` | String! | ✅ Yes | The ID of the user to remove |
+
+### RemoveCompanyUserInput
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `companyId` | String! | ✅ Yes | The ID or slug of the company |
+| `userId` | String! | ✅ Yes | The ID of the user to remove |
+
+## Response Fields
+
+### RemoveProjectUser Response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | Boolean! | Whether the operation was successful |
+| `operationId` | String | Unique identifier for the operation (currently returns `null`) |
+
+### RemoveCompanyUser Response
+
+The `removeCompanyUser` mutation returns a simple `Boolean` value:
+- `true` - User was successfully removed
+
+## Required Permissions
+
+### Project User Removal
+
+| Role | Can Remove Users |
+|------|-----------------|
+| `OWNER` | ✅ Yes |
+| `ADMIN` | ✅ Yes |
+| `MEMBER` | ❌ No |
+| `READ_ONLY` | ❌ No |
+
+**Important Notes:**
+- You cannot remove users with `OWNER` role from a project
+- The system prevents removal of project owners to maintain project ownership integrity
+
+### Company User Removal
+
+| Role | Can Remove Users |
+|------|-----------------|
+| `OWNER` | ✅ Yes |
+| `ADMIN` | ❌ No |
+| `MEMBER` | ❌ No |
+| `READ_ONLY` | ❌ No |
+
+**Note:** Only company owners can remove users from the company. The resolver enforces strict OWNER-only access for company user removal operations.
+
+## Side Effects
+
+### Project Removal
+- Removes all todo assignments for the user in that project
+- Deletes user's project folders
+- Removes project user relationship
+- Sends real-time updates to notify other users
+- Creates audit log entry
+
+### Company Removal
+- **Cascading deletion across all projects:**
+  - Removes all todo assignments in all company projects
+  - Removes all project user folders
+  - Removes user from all company projects
+- Removes company user folders
+- Removes user from company
+- Sends removal notification email to the removed user
+- **Updates billing (if per-user pricing):**
+  - Recalculates active user count
+  - Updates Stripe subscription quantity
+- Creates audit log entry
+
+## Error Responses
+
+### Project Not Found
+```json
+{
+  "errors": [{
+    "message": "Project was not found.",
+    "extensions": {
+      "code": "PROJECT_NOT_FOUND"
+    }
+  }]
+}
+```
+
+### User Not Found
+```json
+{
+  "errors": [{
+    "message": "User was not found.",
+    "extensions": {
+      "code": "USER_NOT_FOUND"
+    }
+  }]
+}
+```
+
+### Unauthorized Error
+```json
+{
+  "errors": [{
+    "message": "You are not authorized.",
+    "extensions": {
+      "code": "FORBIDDEN"
+    }
+  }]
+}
+```
+
+### Company Not Found (removeCompanyUser only)
+```json
+{
+  "errors": [{
+    "message": "Company was not found.",
+    "extensions": {
+      "code": "COMPANY_NOT_FOUND"
+    }
+  }]
+}
+```
+
+This error occurs when:
+- You lack the required role (OWNER/ADMIN for projects, OWNER for company)
+- You attempt to remove a project OWNER
+- The user is not part of the project/company
+
+## Important Considerations
+
+- **Data Preservation**: User removal is not reversible. While the user loses access, their historical data (comments, activity logs, etc.) is preserved for audit purposes.
+- **Owner Protection**: Project owners cannot be removed from projects. Transfer ownership first if needed.
+- **Billing Impact**: Company user removal automatically updates your subscription if you're on per-user pricing.
+- **Email Notification**: Company removal sends a notification email to the removed user.
+- **Cascade Effect**: Company removal affects all projects, while project removal is isolated to that specific project.
+
+## Related Operations
+
+- [List Users](/api/user-management/list-users) - View users before removal
+- [Retrieve Custom Role](/api/user-management/retrieve-custom-role) - Check user permissions
+- [Create Project](/api/projects/create-project) - Add users to new projects

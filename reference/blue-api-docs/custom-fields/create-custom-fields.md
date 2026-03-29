@@ -1,0 +1,380 @@
+---
+title: Create a Custom Field
+description: Add new custom fields to extend your project's data structure with type-specific configurations
+icon: Plus
+---
+
+## Create a Custom Field
+
+Custom fields allow you to tailor Blue to your specific business needs by adding structured data fields to your records. This endpoint creates a new custom field with configurations specific to each field type.
+
+### Basic Example
+
+```graphql
+mutation CreateTextField {
+  createCustomField(input: {
+    name: "Customer Name"
+    type: TEXT_SINGLE
+    description: "Primary customer contact name"
+  }) {
+    id
+    uid
+    name
+    type
+    position
+  }
+}
+```
+
+### Advanced Example
+
+```graphql
+mutation CreateAdvancedField {
+  createCustomField(input: {
+    name: "Project Budget"
+    type: CURRENCY
+    description: "Total allocated budget for this project"
+    currency: "USD"
+    min: 0
+    max: 1000000
+  }) {
+    id
+    uid
+    name
+    type
+    currency
+    min
+    max
+    position
+    createdAt
+  }
+}
+```
+
+## Input Parameters
+
+### CreateCustomFieldInput
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | String! | ✅ Yes | The display name of the custom field |
+| `type` | CustomFieldType! | ✅ Yes | The field type (see types below) |
+| `description` | String | No | Optional description explaining the field's purpose |
+| `min` | Float | No | Minimum value for NUMBER, RATING, PERCENT fields |
+| `max` | Float | No | Maximum value for NUMBER, RATING, PERCENT fields |
+| `currency` | String | No | ISO currency code for CURRENCY fields |
+| `prefix` | String | No | Text prefix for UNIQUE_ID fields |
+| `isDueDate` | Boolean | No | Whether DATE field represents a due date |
+| `formula` | JSON | No | Formula configuration for FORMULA fields |
+| `referenceProjectId` | String | No | Target project ID for REFERENCE fields |
+| `referenceMultiple` | Boolean | No | Allow multiple selections in REFERENCE fields |
+| `referenceFilter` | TodoFilterInput | No | Filter options for REFERENCE fields |
+| `lookupOption` | CustomFieldLookupOptionInput | No | Configuration for LOOKUP fields |
+| `timeDurationDisplay` | CustomFieldTimeDurationDisplayType | No | Display format for TIME_DURATION |
+| `timeDurationTargetTime` | Float | No | Target time in seconds for TIME_DURATION |
+| `timeDurationStartInput` | CustomFieldTimeDurationInput | No | Start trigger for TIME_DURATION |
+| `timeDurationEndInput` | CustomFieldTimeDurationInput | No | End trigger for TIME_DURATION |
+| `buttonType` | String | No | Button action type for BUTTON fields |
+| `buttonConfirmText` | String | No | Confirmation prompt for BUTTON fields |
+| `useSequenceUniqueId` | Boolean | No | Use sequential numbering for UNIQUE_ID |
+| `sequenceDigits` | Int | No | Number of digits in sequence (e.g., 5 → 00001) |
+| `sequenceStartingNumber` | Int | No | Starting number for sequence |
+| `currencyFieldId` | String | No | Reference currency field for CURRENCY_CONVERSION |
+| `conversionDate` | String | No | Conversion date for CURRENCY_CONVERSION |
+| `conversionDateType` | String | No | Type of conversion date for CURRENCY_CONVERSION |
+| `metadata` | JSON | No | Additional metadata for the custom field |
+
+### CustomFieldType Values
+
+| Value | Description | Required Parameters |
+|-------|-------------|-------------------|
+| `TEXT_SINGLE` | Single line text input | None |
+| `TEXT_MULTI` | Multi-line text area | None |
+| `SELECT_SINGLE` | Single selection dropdown | Create options separately |
+| `SELECT_MULTI` | Multiple selection dropdown | Create options separately |
+| `CHECKBOX` | Boolean checkbox | None |
+| `RATING` | Star rating field | Optional: `max` (default: 5) |
+| `PHONE` | Phone number with validation | None |
+| `NUMBER` | Numeric input | Optional: `min`, `max` |
+| `CURRENCY` | Currency amount | Optional: `currency`, `min`, `max` |
+| `PERCENT` | Percentage (0-100) | Optional: `min`, `max` |
+| `EMAIL` | Email with validation | None |
+| `URL` | Web URL with validation | None |
+| `UNIQUE_ID` | Auto-generated identifier | Optional: `prefix`, `useSequenceUniqueId` |
+| `LOCATION` | Geographic coordinates | None |
+| `FILE` | File attachment | None |
+| `DATE` | Date picker | Optional: `isDueDate` |
+| `COUNTRY` | Country selector | None |
+| `FORMULA` | Calculated field | Required: `formula` |
+| `REFERENCE` | Link to other records | Required: `referenceProjectId` |
+| `LOOKUP` | Pull data from references | Required: `lookupOption` |
+| `TIME_DURATION` | Time tracking | Required: duration inputs (see below) |
+| `BUTTON` | Action button | Optional: `buttonType`, `buttonConfirmText` |
+| `CURRENCY_CONVERSION` | Currency converter | Special configuration |
+
+## Field Type Configuration Examples
+
+### Number Field with Constraints
+```graphql
+mutation CreateQuantityField {
+  createCustomField(input: {
+    name: "Quantity"
+    type: NUMBER
+    description: "Number of items"
+    min: 1
+    max: 999
+  }) {
+    id
+    name
+    min
+    max
+  }
+}
+```
+
+### Currency Field
+```graphql
+mutation CreateBudgetField {
+  createCustomField(input: {
+    name: "Budget"
+    type: CURRENCY
+    currency: "EUR"
+    min: 0
+  }) {
+    id
+    name
+    currency
+    min
+  }
+}
+```
+
+### Date Field with Due Date Flag
+```graphql
+mutation CreateDeadlineField {
+  createCustomField(input: {
+    name: "Project Deadline"
+    type: DATE
+    isDueDate: true
+    description: "When this project must be completed"
+  }) {
+    id
+    name
+    isDueDate
+  }
+}
+```
+
+### Reference Field
+```graphql
+mutation CreateRelatedTasksField {
+  createCustomField(input: {
+    name: "Dependencies"
+    type: REFERENCE
+    referenceProjectId: "proj_abc123"
+    referenceMultiple: true
+    referenceFilter: {
+      statusIds: ["status_open", "status_inprogress"]
+    }
+  }) {
+    id
+    name
+    referenceProjectId
+    referenceMultiple
+  }
+}
+```
+
+### Lookup Field
+```graphql
+mutation CreateLookupField {
+  createCustomField(input: {
+    name: "Customer Email"
+    type: LOOKUP
+    lookupOption: {
+      referenceId: "field_customer_ref"
+      lookupId: "field_email"
+      lookupType: TODO_CUSTOM_FIELD
+    }
+  }) {
+    id
+    name
+    customFieldLookupOption {
+      referenceId
+      lookupId
+      lookupType
+    }
+  }
+}
+```
+
+### Unique ID with Sequence
+```graphql
+mutation CreateOrderNumberField {
+  createCustomField(input: {
+    name: "Order Number"
+    type: UNIQUE_ID
+    prefix: "ORD-"
+    useSequenceUniqueId: true
+    sequenceDigits: 6
+    sequenceStartingNumber: 1000
+  }) {
+    id
+    name
+    prefix
+  }
+}
+```
+
+### Time Duration Field
+```graphql
+mutation CreateTimeTrackingField {
+  createCustomField(input: {
+    name: "Time to Resolution"
+    type: TIME_DURATION
+    timeDurationDisplay: FULL_DATE_STRING
+    timeDurationStartInput: {
+      type: TODO_CREATED_AT
+      condition: FIRST
+    }
+    timeDurationEndInput: {
+      type: TODO_MARKED_AS_COMPLETE
+      condition: FIRST
+    }
+  }) {
+    id
+    name
+  }
+}
+```
+
+#### Valid Time Duration Types
+- `TODO_CREATED_AT` - When the record was created
+- `TODO_CUSTOM_FIELD` - When a custom field changes
+- `TODO_DUE_DATE` - When due date is set/changed
+- `TODO_MARKED_AS_COMPLETE` - When record is marked complete
+- `TODO_MOVED` - When record is moved to different list
+- `TODO_TAG_ADDED` - When a tag is added
+- `TODO_ASSIGNEE_ADDED` - When an assignee is added
+
+## Creating Select Options
+
+After creating a SELECT_SINGLE or SELECT_MULTI field, add options:
+
+```graphql
+mutation CreateSelectOptions {
+  createCustomFieldOptions(input: {
+    customFieldId: "field_xyz789"
+    customFieldOptions: [
+      { title: "High", color: "#FF0000", position: 1 }
+      { title: "Medium", color: "#FFA500", position: 2 }
+      { title: "Low", color: "#00FF00", position: 3 }
+    ]
+  }) {
+    id
+    title
+    color
+    position
+  }
+}
+```
+
+## Response Fields
+
+### CustomField
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | String! | Unique identifier |
+| `uid` | String! | User-friendly unique ID |
+| `name` | String! | Display name |
+| `type` | CustomFieldType! | Field type |
+| `description` | String | Field description |
+| `position` | Float! | Display order position |
+| `createdAt` | DateTime! | Creation timestamp |
+| `updatedAt` | DateTime! | Last update timestamp |
+| `min` | Float | Minimum value (if applicable) |
+| `max` | Float | Maximum value (if applicable) |
+| `currency` | String | Currency code (CURRENCY type) |
+| `prefix` | String | ID prefix (UNIQUE_ID type) |
+| `isDueDate` | Boolean | Due date flag (DATE type) |
+| `formula` | JSON | Formula config (FORMULA type) |
+| `referenceProjectId` | String | Referenced project (REFERENCE type) |
+| `customFieldLookupOption` | CustomFieldLookupOption | Lookup config (LOOKUP type) |
+
+## Required Permissions
+
+Creating custom fields requires project access:
+
+| Role | Can Create Custom Fields |
+|------|-------------------------|
+| `OWNER` | ✅ Yes |
+| `ADMIN` | ✅ Yes |
+| `MEMBER` | ✅ Yes |
+| `CLIENT` | ❌ No |
+
+Note: Custom roles may have additional restrictions on field management.
+
+## Error Responses
+
+### Invalid Field Type
+```json
+{
+  "errors": [{
+    "message": "Variable \"$input\" got invalid value \"INVALID\" at \"input.type\"; Value \"INVALID\" does not exist in \"CustomFieldType\" enum.",
+    "extensions": {
+      "code": "GRAPHQL_VALIDATION_FAILED"
+    }
+  }]
+}
+```
+
+### Reference Project Not Found
+```json
+{
+  "errors": [{
+    "message": "Reference project not found or access denied",
+    "extensions": {
+      "code": "PROJECT_NOT_FOUND"
+    }
+  }]
+}
+```
+
+### Missing Required Configuration
+```json
+{
+  "errors": [{
+    "message": "REFERENCE fields require referenceProjectId",
+    "extensions": {
+      "code": "VALIDATION_ERROR"
+    }
+  }]
+}
+```
+
+## Important Notes
+
+- **Field Position**: Automatically calculated to appear at the end of existing fields
+- **Field Limits**: Projects may have limits on the number of custom fields
+- **Immediate Availability**: Created fields are immediately available for use
+- **Side Effects**: Creating a field triggers:
+  - Activity log entry
+  - Real-time updates to connected users
+  - Webhook notifications
+  - Background jobs for FORMULA, LOOKUP, and UNIQUE_ID fields
+- **Special Considerations**:
+  - **REFERENCE** fields require access to the target project
+  - **LOOKUP** fields depend on existing REFERENCE fields
+  - **FORMULA** fields cannot reference themselves
+  - **UNIQUE_ID** sequences process asynchronously
+  - **SELECT** fields need options created separately
+- **Naming**: Field names should be clear and descriptive as they appear in the UI
+
+## Related Endpoints
+
+- [List Custom Fields](/api/custom-fields/list-custom-fields) - View existing custom fields
+- [Update Custom Field](/api/custom-fields/update-custom-field) - Modify field properties
+- [Delete Custom Field](/api/custom-fields/delete-custom-field) - Remove a custom field
+- [Create Field Options](/api/custom-fields/create-field-options) - Add options to select fields
+- [Set Custom Field Values](/api/custom-fields/custom-field-values) - Set values on records

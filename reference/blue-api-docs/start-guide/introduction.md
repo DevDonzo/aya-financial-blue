@@ -1,0 +1,67 @@
+---
+title: Introduction
+description: Welcome to the Blue API documentation.
+icon: BookOpen
+---
+
+The Blue API provides complete access to Blue's process management platform through a modern [GraphQL](https://graphql.org/) interface. Trusted by **17,000+ customers** processing **billions of API requests annually**, our API powers mission-critical workflows with **[99.99% uptime](/platform/status)**.
+
+## Why Blue API?
+
+- **100% Feature Coverage** - Everything you can do in Blue's UI, you can do via API
+- **Enterprise-Ready** - Battle-tested at scale with comprehensive rate limiting and security
+- **Developer-Friendly** - GraphQL provides exactly the data you need, nothing more
+- **Real-Time Updates** - WebSocket subscriptions for instant data synchronization
+
+## Quick Start
+
+Ready to make your first API call? Here's how simple it is:
+
+```graphql
+query MyProjects {
+  projectList(filter: { companyIds: ["your-company-id"] }) {
+    items {
+      id
+      name
+      updatedAt
+    }
+  }
+}
+```
+
+**[Try it in our GraphQL Playground →](https://api.blue.cc/graphql)**
+
+## What You'll Learn
+
+1. **[Authentication](/api/start-guide/authentication)** - Set up secure API access with tokens
+2. **[Making Requests](/api/start-guide/making-requests)** - Execute queries, mutations, and subscriptions
+3. **[Rate Limits](/api/start-guide/rate-limits)** - Understand usage limits and best practices
+4. **[File Uploads](/api/start-guide/upload-files)** - Handle documents and media
+
+## Popular Use Cases
+
+### Data Management
+- Use Blue as a flexible database for custom applications
+- Sync data between Blue and your existing systems
+- Build custom dashboards and reporting tools
+
+### Workflow Automation
+- Create records from external triggers (forms, webhooks, emails)
+- Update multiple projects based on business logic
+- Automate task assignments and notifications
+
+### Integration Development
+- Connect Blue with external CRMs, ERPs, and specialized tools
+- Build custom integrations for your industry
+- Extend Blue's capabilities with your own features
+
+## Get Help
+
+Our engineering team is here to help you succeed. Contact **support@blue.cc** for:
+- Custom query assistance
+- Best practices for your use case
+- Adding your examples to our documentation
+
+We look forward to seeing what you build with the Blue API!
+
+Team Blue

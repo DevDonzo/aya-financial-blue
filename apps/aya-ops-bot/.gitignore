@@ -1,0 +1,11 @@
+node_modules/
+dist/
+admin-ui/node_modules/
+admin-ui/dist/
+.env
+.env.*
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+.DS_Store

@@ -1,0 +1,19 @@
+---
+title: GraphQL Playground
+description: Blue API uses GraphQL to provide a flexible and efficient way to interact with our API.
+icon: Play
+---
+
+
+## GraphQL Playground
+
+You can use the GraphQL Playground to test the API. It is available at https://api.blue.cc/graphql.
+
+
+![API 1](/docs/API_1.png "API 1")
+
+## Video Overview
+
+We have also made a video tutorial that explains how you can leverage the GraphQL Playground to test the API.
+
+<youtube url="https://www.youtube.com/watch?v=GKSAHnoFn4s" />

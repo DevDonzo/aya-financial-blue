@@ -1,0 +1,248 @@
+---
+title: Custom Roles
+description: Retrieve, create, update, and delete custom user roles with granular permissions.
+icon: Shield
+---
+
+## Custom Roles
+
+Custom roles in Blue allow you to define precise permission sets tailored to your team's needs. Beyond the standard access levels (OWNER, ADMIN, MEMBER, etc.), custom roles provide granular control over what users can see and do within projects.
+
+### Basic Example - List Custom Roles
+
+Retrieve all custom roles for a project:
+
+```graphql
+query GetProjectRoles {
+  projectUserRoles(filter: { projectId: "web-redesign" }) {
+    id
+    name
+    description
+    allowInviteOthers
+    canDeleteRecords
+  }
+}
+```
+
+### Advanced Example - Create Custom Role
+
+Create a contractor role with specific permissions:
+
+```graphql
+mutation CreateContractorRole {
+  createProjectUserRole(
+    input: {
+      projectId: "web-redesign"
+      name: "External Contractor"
+      description: "Limited access for external contractors"
+      allowInviteOthers: false
+      allowMarkRecordsAsDone: true
+      canDeleteRecords: false
+      showOnlyAssignedTodos: true
+      isActivityEnabled: true
+      isFormsEnabled: false
+      isWikiEnabled: true
+      isChatEnabled: false
+      isDocsEnabled: true
+      isFilesEnabled: true
+      isRecordsEnabled: true
+      isPeopleEnabled: false
+    }
+  ) {
+    id
+    name
+  }
+}
+```
+
+## Available Operations
+
+### Query: projectUserRoles
+
+Retrieve all custom roles for a project.
+
+#### Input Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `filter.projectId` | String | No | Project ID or slug (if not provided, returns roles for all accessible projects) |
+
+### Mutation: createProjectUserRole
+
+Create a new custom role with specific permissions.
+
+#### Input Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `projectId` | String! | ✅ Yes | Project ID or slug |
+| `name` | String! | ✅ Yes | Role name |
+| `description` | String | No | Role description |
+| **Permission Flags** |
+| `allowInviteOthers` | Boolean | No | Can invite new users (default: false) |
+| `allowMarkRecordsAsDone` | Boolean | No | Can complete tasks (default: false) |
+| `canDeleteRecords` | Boolean | No | Can delete records (default: true) |
+| **Feature Access** |
+| `isActivityEnabled` | Boolean | No | Access to Activity section (default: true) |
+| `isChatEnabled` | Boolean | No | Access to Chat (default: true) |
+| `isDocsEnabled` | Boolean | No | Access to Docs (default: true) |
+| `isFilesEnabled` | Boolean | No | Access to Files (default: true) |
+| `isFormsEnabled` | Boolean | No | Access to Forms (default: true) |
+| `isWikiEnabled` | Boolean | No | Access to Wiki (default: true) |
+| `isRecordsEnabled` | Boolean | No | Access to Records (default: true) |
+| `isPeopleEnabled` | Boolean | No | Access to People section (default: true) |
+| **Visibility Settings** |
+| `showOnlyAssignedTodos` | Boolean | No | Only see assigned tasks (default: false) |
+| `showOnlyMentionedComments` | Boolean | No | Only see mentioned comments (default: false) |
+
+### Mutation: updateProjectUserRole
+
+Update an existing custom role.
+
+#### Input Parameters
+
+Same as `createProjectUserRole`, plus:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `roleId` | String! | ✅ Yes | ID of the role to update |
+
+### Mutation: deleteProjectUserRole
+
+Delete a custom role.
+
+#### Input Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `roleId` | String! | ✅ Yes | ID of the role to delete |
+| `projectId` | String! | ✅ Yes | Project ID or slug |
+
+## Response Fields
+
+### ProjectUserRole Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | String! | Unique role identifier |
+| `name` | String! | Role name |
+| `description` | String | Role description |
+| `createdAt` | DateTime! | Creation timestamp |
+| `updatedAt` | DateTime! | Last update timestamp |
+| **Permissions** |
+| `allowInviteOthers` | Boolean! | Can invite users |
+| `allowMarkRecordsAsDone` | Boolean! | Can complete tasks |
+| `canDeleteRecords` | Boolean! | Can delete records |
+| **Feature Flags** |
+| `isActivityEnabled` | Boolean! | Activity section access |
+| `isChatEnabled` | Boolean! | Chat access |
+| `isDocsEnabled` | Boolean! | Docs access |
+| `isFilesEnabled` | Boolean! | Files access |
+| `isFormsEnabled` | Boolean! | Forms access |
+| `isWikiEnabled` | Boolean! | Wiki access |
+| `isRecordsEnabled` | Boolean! | Records access |
+| `isPeopleEnabled` | Boolean! | People section access |
+| **Visibility** |
+| `showOnlyAssignedTodos` | Boolean! | Task visibility filter |
+| `showOnlyMentionedComments` | Boolean! | Comment visibility filter |
+
+## Required Permissions
+
+| Operation | Required Permission |
+|-----------|-------------------|
+| `projectUserRoles` | Any project member |
+| `createProjectUserRole` | Project OWNER or ADMIN |
+| `updateProjectUserRole` | Project OWNER or ADMIN |
+| `deleteProjectUserRole` | Project OWNER or ADMIN |
+
+## Error Responses
+
+### Insufficient Permissions
+```json
+{
+  "errors": [{
+    "message": "You don't have permission to manage custom roles",
+    "extensions": {
+      "code": "UNAUTHORIZED"
+    }
+  }]
+}
+```
+
+### Role Not Found
+```json
+{
+  "errors": [{
+    "message": "Custom role not found",
+    "extensions": {
+      "code": "PROJECT_USER_ROLE_NOT_FOUND"
+    }
+  }]
+}
+```
+
+### Role Limit Reached
+```json
+{
+  "errors": [{
+    "message": "Project user role limit reached.",
+    "extensions": {
+      "code": "PROJECT_USER_ROLE_LIMIT"
+    }
+  }]
+}
+```
+
+## Important Notes
+
+- **Default Permissions**: When creating roles, unspecified boolean permissions default to false except for `canDeleteRecords` which defaults to true
+- **Role Assignment**: Assign custom roles by setting `accessLevel: MEMBER` and providing the `roleId` in the `inviteUser` mutation
+- **Hierarchy**: Custom roles are treated as MEMBER-level for hierarchy purposes
+- **Role Limits**: Each project can have a maximum of 20 custom roles
+- **Feature Access**: The feature flags control access to entire sections of the application
+
+## Use Cases
+
+### Contractor Role
+```graphql
+{
+  name: "Contractor",
+  allowInviteOthers: false,
+  canDeleteRecords: false,
+  showOnlyAssignedTodos: true,
+  isActivityEnabled: true,
+  isChatEnabled: false,
+  isPeopleEnabled: false
+}
+```
+
+### Department Lead
+```graphql
+{
+  name: "Department Lead",
+  allowInviteOthers: true,
+  allowMarkRecordsAsDone: true,
+  canDeleteRecords: true,
+  isActivityEnabled: true,
+  isWikiEnabled: true,
+  isPeopleEnabled: true
+}
+```
+
+### Read-Only Observer
+```graphql
+{
+  name: "Observer",
+  allowMarkRecordsAsDone: false,
+  canDeleteRecords: false,
+  allowInviteOthers: false,
+  showOnlyMentionedComments: true,
+  isFormsEnabled: false
+}
+```
+
+## Related Operations
+
+- [Invite User](/api/user-management/) - Assign custom roles to users
+- [List Users](/api/user-management/list-users) - View users and their roles
+- [Remove User](/api/user-management/remove-user) - Remove users from projects

@@ -1,0 +1,261 @@
+---
+title: Templates
+description: Templates allow you to reuse the structure of existing workspaces to kickstart new initiatives with the same framework already in place.
+icon: BookTemplate
+---
+
+## Templates Overview
+
+Blue supports two types of templates:
+- **Organization Templates**: Created by your organization for internal use
+- **Official Templates**: Created by Blue for all users (industry-standard templates)
+
+Templates preserve the entire workspace structure including todos, lists, custom fields, automations, and more.
+
+## List Templates
+
+### Using the templates Query
+
+```graphql
+query GetTemplates {
+  templates(
+    companyId: "company-123"
+    isOfficialTemplate: false
+    category: MARKETING
+  ) {
+    id
+    name
+    description
+    category
+    isOfficialTemplate
+    icon
+    color
+    image {
+      thumbnail
+      small
+    }
+  }
+}
+```
+
+### Using projectList with Template Filter
+
+```graphql
+query ListTemplates {
+  projectList(
+    filter: {
+      companyIds: ["company-id"]
+      isTemplate: true
+    }
+    sort: [updatedAt_DESC]
+    take: 20
+    skip: 0
+  ) {
+    items {
+      id
+      slug
+      name
+      description
+      category
+      isTemplate
+      isOfficialTemplate
+      color
+      icon
+      createdAt
+      updatedAt
+    }
+    pageInfo {
+      hasNextPage
+      totalItems
+    }
+    totalCount
+  }
+}
+```
+
+## Create Workspace from Template
+
+To create a new workspace from an existing template:
+
+```graphql
+mutation CreateFromTemplate {
+  createProject(
+    input: {
+      templateId: "template-id-or-slug"
+      name: "Q1 Marketing Campaign"
+      companyId: "company-id"
+      description: "Marketing initiatives for Q1"
+      color: "#10B981"
+    }
+  ) {
+    id
+    name
+    slug
+  }
+}
+```
+
+<Callout variant="info">
+Creating from a template is an asynchronous process. The workspace is created immediately, but content is copied in the background. Use the `copyProjectStatus` query to track progress.
+</Callout>
+
+## Convert Workspace to Template
+
+Transform an existing workspace into a reusable template:
+
+```graphql
+mutation ConvertToTemplate {
+  convertProjectToTemplate(
+    input: {
+      projectId: "project-123"
+      isOfficialTemplate: false
+    }
+  ) {
+    id
+    name
+    isTemplate
+    isOfficialTemplate
+  }
+}
+```
+
+## Remove Template Status
+
+Convert a template back to a regular workspace:
+
+```graphql
+mutation RemoveTemplateStatus {
+  removeProjectFromTemplates(projectId: "template-123") {
+    id
+    name
+    isTemplate
+  }
+}
+```
+
+## Get Single Template
+
+Retrieve details about a specific template:
+
+```graphql
+query GetTemplate {
+  template(templateId: "template-123") {
+    id
+    name
+    description
+    category
+    isOfficialTemplate
+    todoLists {
+      name
+      todos {
+        title
+      }
+    }
+  }
+}
+```
+
+## Query Parameters
+
+### templates Query
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `companyId` | String | No | Filter templates by organization. Omit to see official templates. |
+| `isOfficialTemplate` | Boolean | No | Show only official Blue templates |
+| `category` | ProjectCategory | No | Filter by workspace category |
+
+### convertProjectToTemplate Input
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `projectId` | String! | ✅ Yes | The workspace to convert to a template |
+| `isOfficialTemplate` | Boolean! | ✅ Yes | Mark as official template (Blue employees only) |
+
+### Template Categories
+
+| Value | Description |
+|-------|-------------|
+| `CRM` | Customer Relationship Management |
+| `CROSS_FUNCTIONAL` | Cross-functional team workspaces |
+| `CUSTOMER_SUCCESS` | Customer success initiatives |
+| `DESIGN` | Design and creative workspaces |
+| `ENGINEERING` | Engineering and development |
+| `GENERAL` | General workspaces (default) |
+| `HR` | Human Resources |
+| `IT` | Information Technology |
+| `MARKETING` | Marketing campaigns |
+| `OPERATIONS` | Operations and logistics |
+| `PRODUCT` | Product management |
+| `SALES` | Sales and business development |
+
+## What Gets Copied from Templates
+
+When creating a workspace from a template, the following is copied:
+
+- ✅ **Structure**: All todo lists and todos with their positions
+- ✅ **Content**: Descriptions, comments, and attachments
+- ✅ **Organization**: Tags, labels, and custom fields
+- ✅ **Automation**: All automation rules and workflows
+- ✅ **Forms**: Workspace forms and their configurations
+- ✅ **Documents**: Wiki pages and documentation
+- ✅ **Settings**: Cover configurations and display preferences
+- ✅ **Roles**: User role definitions (but not user assignments)
+
+Not copied:
+- ❌ User assignments (except the creator)
+- ❌ Activity history
+- ❌ Time tracking data
+- ❌ Completed status of todos
+
+## Required Permissions
+
+### Creating Templates
+
+| Action | Required Role |
+|--------|--------------|
+| Convert workspace to template | Workspace `OWNER` or `ADMIN` |
+| Create official template | Blue employee only |
+| Remove template status | Workspace `OWNER` or `ADMIN` |
+
+### Using Templates
+
+| Template Type | Who Can Use |
+|--------------|-------------|
+| Organization templates | Users in the same organization |
+| Official templates | All Blue users |
+
+## Error Responses
+
+### Template Not Found
+```json
+{
+  "errors": [{
+    "message": "Template not found",
+    "extensions": {
+      "code": "TEMPLATE_NOT_FOUND"
+    }
+  }]
+}
+```
+
+### Too Many Todos
+```json
+{
+  "errors": [{
+    "message": "This project has more than 250,000 todos and cannot be used as a template",
+    "extensions": {
+      "code": "TOO_MANY_TODOS"
+    }
+  }]
+}
+```
+
+## Important Notes
+
+- **Size Limit**: Workspaces with more than 250,000 todos cannot be used as templates
+- **Async Copying**: Template content is copied in the background via job queue
+- **Archive Status**: Converting to template automatically unarchives the workspace
+- **Folder Removal**: Templates are removed from folders when converted
+- **Access Control**: Official templates are visible to all, organization templates only to members
+- **Real-time Updates**: Subscribe to template changes using the `subscribeToProject` subscription

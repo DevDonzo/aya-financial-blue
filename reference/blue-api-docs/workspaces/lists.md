@@ -1,0 +1,374 @@
+---
+title: Lists
+description: Manage todo lists within workspaces - create, edit, delete, and query lists
+icon: SquareKanban
+---
+
+## Overview
+
+Lists in Blue are containers for organizing todos within a workspace. Each list can hold multiple todos and helps structure work into logical groups. Lists support positioning, locking, and role-based access control.
+
+<youtube url="https://www.youtube.com/watch?v=qziabkn_Gu8" />
+
+## Key Concepts
+
+- Each workspace can have up to **50 lists**
+- Lists are ordered by position (ascending)
+- Lists can be locked to prevent modifications
+- Lists respect workspace-level and role-based permissions
+- Deleted lists are moved to trash (soft delete)
+
+## Queries
+
+### Get a Single List
+
+Retrieve a specific todo list by ID.
+
+```graphql
+query GetTodoList($id: String!) {
+  todoList(id: $id) {
+    id
+    uid
+    title
+    position
+    isDisabled
+    isLocked
+    createdAt
+    updatedAt
+    project {
+      id
+      name
+    }
+    createdBy {
+      id
+      username
+    }
+  }
+}
+```
+
+### Get All Lists in a Workspace
+
+Retrieve all todo lists for a specific workspace.
+
+```graphql
+query GetProjectLists($projectId: String!) {
+  todoLists(projectId: $projectId) {
+    id
+    uid
+    title
+    position
+    isDisabled
+    isLocked
+    createdAt
+    updatedAt
+  }
+}
+```
+
+### Advanced List Query
+
+Query lists with filtering, sorting, and pagination.
+
+```graphql
+query SearchTodoLists($filter: TodoListsFilterInput!, $sort: [TodoListsSort!], $skip: Int, $take: Int) {
+  todoListQueries {
+    todoLists(filter: $filter, sort: $sort, skip: $skip, take: $take) {
+      items {
+        id
+        uid
+        title
+        position
+        isDisabled
+        isLocked
+        createdAt
+        updatedAt
+        project {
+          id
+          name
+        }
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        total
+      }
+    }
+  }
+}
+```
+
+## Mutations
+
+### Create a List
+
+Create a new todo list in a workspace.
+
+```graphql
+mutation CreateTodoList($input: CreateTodoListInput!) {
+  createTodoList(input: $input) {
+    id
+    uid
+    title
+    position
+    isDisabled
+    isLocked
+    createdAt
+    project {
+      id
+      name
+    }
+  }
+}
+```
+
+**Example:**
+```graphql
+mutation {
+  createTodoList(input: {
+    projectId: "project-123"
+    title: "Sprint 1 Tasks"
+    position: 1.0
+  }) {
+    id
+    title
+  }
+}
+```
+
+### Edit a List
+
+Update an existing todo list's properties.
+
+```graphql
+mutation EditTodoList($input: EditTodoListInput!) {
+  editTodoList(input: $input) {
+    id
+    title
+    position
+    isLocked
+    updatedAt
+  }
+}
+```
+
+**Example:**
+```graphql
+mutation {
+  editTodoList(input: {
+    todoListId: "list-123"
+    title: "Sprint 1 - In Progress"
+    position: 2.0
+    isLocked: true
+  }) {
+    id
+    title
+    isLocked
+  }
+}
+```
+
+### Delete a List
+
+Delete a todo list (moves to trash).
+
+```graphql
+mutation DeleteTodoList($input: DeleteTodoListInput!) {
+  deleteTodoList(input: $input) {
+    success
+  }
+}
+```
+
+**Example:**
+```graphql
+mutation {
+  deleteTodoList(input: {
+    projectId: "project-123"
+    todoListId: "list-123"
+  }) {
+    success
+  }
+}
+```
+
+### Mark List as Done/Undone
+
+Mark all todos in a list as done or undone.
+
+```graphql
+# Mark as done
+mutation MarkListDone($todoListId: String!, $filter: TodosFilter) {
+  markTodoListAsDone(todoListId: $todoListId, filter: $filter)
+}
+
+# Mark as undone
+mutation MarkListUndone($todoListId: String!, $filter: TodosFilter) {
+  markTodoListAsUndone(todoListId: $todoListId, filter: $filter)
+}
+```
+
+## Input Types
+
+### CreateTodoListInput
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `projectId` | String! | ✅ Yes | The workspace ID where the list will be created |
+| `title` | String! | ✅ Yes | The name of the list |
+| `position` | Float! | ✅ Yes | The position of the list (for ordering) |
+
+### EditTodoListInput
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `todoListId` | String! | ✅ Yes | The ID of the list to edit |
+| `title` | String | No | New title for the list |
+| `position` | Float | No | New position for the list |
+| `isLocked` | Boolean | No | Whether the list should be locked |
+
+### DeleteTodoListInput
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `projectId` | String! | ✅ Yes | The workspace ID (for verification) |
+| `todoListId` | String! | ✅ Yes | The ID of the list to delete |
+
+### TodoListsFilterInput
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `companyIds` | [String!]! | ✅ Yes | Filter by organization IDs |
+| `projectIds` | [String!] | No | Filter by specific workspace IDs |
+| `ids` | [String!] | No | Filter by specific list IDs |
+| `titles` | [String!] | No | Filter by list titles |
+| `search` | String | No | Search lists by title |
+
+### TodoListsSort Values
+
+| Value | Description |
+|-------|-------------|
+| `title_ASC` | Sort by title ascending |
+| `title_DESC` | Sort by title descending |
+| `createdAt_ASC` | Sort by creation date ascending |
+| `createdAt_DESC` | Sort by creation date descending |
+| `updatedAt_ASC` | Sort by update date ascending |
+| `updatedAt_DESC` | Sort by update date descending |
+| `position_ASC` | Sort by position ascending (default) |
+| `position_DESC` | Sort by position descending |
+
+## Response Types
+
+### TodoList Type
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | ID! | Unique identifier |
+| `uid` | String! | User-friendly identifier |
+| `position` | Float! | List position for ordering |
+| `title` | String! | List name |
+| `isDisabled` | Boolean! | Whether the list is disabled |
+| `isLocked` | Boolean | Whether the list is locked |
+| `createdAt` | DateTime! | Creation timestamp |
+| `updatedAt` | DateTime! | Last update timestamp |
+| `activity` | Activity | Associated activity log |
+| `createdBy` | User | User who created the list |
+| `project` | Project! | Parent workspace |
+| `todos` | [Todo!]! | Todos in this list |
+| `todosCount` | Int! | Number of todos |
+
+### TodoListsPagination Type
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `items` | [TodoList!]! | Array of todo lists |
+| `pageInfo` | PageInfo! | Pagination information |
+
+## Required Permissions
+
+### Query Permissions
+
+| Operation | Required Permission |
+|-----------|-------------------|
+| `todoList` | Must be authenticated |
+| `todoLists` | Must be authenticated and in organization |
+| `todoListQueries.todoLists` | Must be authenticated and in organization |
+
+### Mutation Permissions
+
+| Operation | Workspace-Level Roles Allowed |
+|-----------|------------------------------|
+| `createTodoList` | OWNER, ADMIN, MEMBER |
+| `editTodoList` | OWNER, ADMIN, MEMBER, CLIENT |
+| `deleteTodoList` | OWNER, ADMIN, MEMBER |
+| `markTodoListAsDone` | OWNER, ADMIN, MEMBER |
+| `markTodoListAsUndone` | OWNER, ADMIN, MEMBER |
+
+**Note:** Users with CLIENT role can edit lists but cannot create or delete them. Users with VIEW_ONLY or COMMENT_ONLY roles cannot create, edit, or delete lists.
+
+## Error Responses
+
+### TodoListNotFoundError
+```json
+{
+  "errors": [{
+    "message": "Todo list was not found.",
+    "extensions": {
+      "code": "TODO_LIST_NOT_FOUND"
+    }
+  }]
+}
+```
+
+### WorkspaceNotFoundError
+```json
+{
+  "errors": [{
+    "message": "Project was not found.",
+    "extensions": {
+      "code": "PROJECT_NOT_FOUND"
+    }
+  }]
+}
+```
+
+### Maximum Lists Error
+```json
+{
+  "errors": [{
+    "message": "You have reached the maximum number of todo lists for this project.",
+    "extensions": {
+      "code": "INTERNAL_SERVER_ERROR"
+    }
+  }]
+}
+```
+
+### UnauthorizedError
+```json
+{
+  "errors": [{
+    "message": "Unauthorized",
+    "extensions": {
+      "code": "UNAUTHORIZED"
+    }
+  }]
+}
+```
+
+## Important Notes
+
+- **List Limit**: Each workspace can have a maximum of 50 lists
+- **Soft Delete**: Deleted lists are moved to trash and can potentially be recovered
+- **Position Management**: When creating lists, ensure positions don't conflict. Use incremental values (1.0, 2.0, 3.0) to allow insertion between lists
+- **Role-Based Access**: Lists can be hidden from certain roles using ProjectUserRoleTodoList permissions
+- **Webhooks**: List creation, updates, and deletion trigger webhooks if configured
+- **Activity Tracking**: All list operations are logged in the activity feed
+- **Real-time Updates**: List changes are published via subscriptions for real-time updates
+
+## Related Operations
+
+- Use `todos` query to fetch todos within a list
+- Use `createTodo` mutation to add todos to a list
+- Use `moveTodo` mutation to move todos between lists
+- Subscribe to list changes using `subscribeToTodoList` subscription

@@ -1,0 +1,89 @@
+# `TodoActionScalarWhereInput`
+
+- Kind: `INPUT_OBJECT`
+
+## Input Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `id` | `ID` | `` |  |
+| `id_not` | `ID` | `` |  |
+| `id_in` | `[ID!]` | `` |  |
+| `id_not_in` | `[ID!]` | `` |  |
+| `id_lt` | `ID` | `` |  |
+| `id_lte` | `ID` | `` |  |
+| `id_gt` | `ID` | `` |  |
+| `id_gte` | `ID` | `` |  |
+| `id_contains` | `ID` | `` |  |
+| `id_not_contains` | `ID` | `` |  |
+| `id_starts_with` | `ID` | `` |  |
+| `id_not_starts_with` | `ID` | `` |  |
+| `id_ends_with` | `ID` | `` |  |
+| `id_not_ends_with` | `ID` | `` |  |
+| `uid` | `String` | `` |  |
+| `uid_not` | `String` | `` |  |
+| `uid_in` | `[String!]` | `` |  |
+| `uid_not_in` | `[String!]` | `` |  |
+| `uid_lt` | `String` | `` |  |
+| `uid_lte` | `String` | `` |  |
+| `uid_gt` | `String` | `` |  |
+| `uid_gte` | `String` | `` |  |
+| `uid_contains` | `String` | `` |  |
+| `uid_not_contains` | `String` | `` |  |
+| `uid_starts_with` | `String` | `` |  |
+| `uid_not_starts_with` | `String` | `` |  |
+| `uid_ends_with` | `String` | `` |  |
+| `uid_not_ends_with` | `String` | `` |  |
+| `type` | `TodoActionType` | `` |  |
+| `type_not` | `TodoActionType` | `` |  |
+| `type_in` | `[TodoActionType!]` | `` |  |
+| `type_not_in` | `[TodoActionType!]` | `` |  |
+| `newValue` | `String` | `` |  |
+| `newValue_not` | `String` | `` |  |
+| `newValue_in` | `[String!]` | `` |  |
+| `newValue_not_in` | `[String!]` | `` |  |
+| `newValue_lt` | `String` | `` |  |
+| `newValue_lte` | `String` | `` |  |
+| `newValue_gt` | `String` | `` |  |
+| `newValue_gte` | `String` | `` |  |
+| `newValue_contains` | `String` | `` |  |
+| `newValue_not_contains` | `String` | `` |  |
+| `newValue_starts_with` | `String` | `` |  |
+| `newValue_not_starts_with` | `String` | `` |  |
+| `newValue_ends_with` | `String` | `` |  |
+| `newValue_not_ends_with` | `String` | `` |  |
+| `oldValue` | `String` | `` |  |
+| `oldValue_not` | `String` | `` |  |
+| `oldValue_in` | `[String!]` | `` |  |
+| `oldValue_not_in` | `[String!]` | `` |  |
+| `oldValue_lt` | `String` | `` |  |
+| `oldValue_lte` | `String` | `` |  |
+| `oldValue_gt` | `String` | `` |  |
+| `oldValue_gte` | `String` | `` |  |
+| `oldValue_contains` | `String` | `` |  |
+| `oldValue_not_contains` | `String` | `` |  |
+| `oldValue_starts_with` | `String` | `` |  |
+| `oldValue_not_starts_with` | `String` | `` |  |
+| `oldValue_ends_with` | `String` | `` |  |
+| `oldValue_not_ends_with` | `String` | `` |  |
+| `automated` | `Boolean` | `` |  |
+| `automated_not` | `Boolean` | `` |  |
+| `createdAt` | `DateTime` | `` |  |
+| `createdAt_not` | `DateTime` | `` |  |
+| `createdAt_in` | `[DateTime!]` | `` |  |
+| `createdAt_not_in` | `[DateTime!]` | `` |  |
+| `createdAt_lt` | `DateTime` | `` |  |
+| `createdAt_lte` | `DateTime` | `` |  |
+| `createdAt_gt` | `DateTime` | `` |  |
+| `createdAt_gte` | `DateTime` | `` |  |
+| `updatedAt` | `DateTime` | `` |  |
+| `updatedAt_not` | `DateTime` | `` |  |
+| `updatedAt_in` | `[DateTime!]` | `` |  |
+| `updatedAt_not_in` | `[DateTime!]` | `` |  |
+| `updatedAt_lt` | `DateTime` | `` |  |
+| `updatedAt_lte` | `DateTime` | `` |  |
+| `updatedAt_gt` | `DateTime` | `` |  |
+| `updatedAt_gte` | `DateTime` | `` |  |
+| `AND` | `[TodoActionScalarWhereInput!]` | `` |  |
+| `OR` | `[TodoActionScalarWhereInput!]` | `` |  |
+| `NOT` | `[TodoActionScalarWhereInput!]` | `` |  |

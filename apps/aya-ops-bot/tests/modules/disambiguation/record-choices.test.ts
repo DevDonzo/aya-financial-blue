@@ -1,0 +1,67 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  selectCandidateFromMessage,
+  type PendingRecordCandidate,
+} from "../../../src/modules/disambiguation/record-choices.js";
+
+const candidates: PendingRecordCandidate[] = [
+  {
+    id: "rec_1",
+    title: "Salman Chappra - Suffah Academy/Masjid Khadij Commercial deal",
+    listTitle: "Rehan Special Projects",
+  },
+  {
+    id: "rec_2",
+    title: "Suffah Academy - Commercial - $6.5 M - Apr 30 2026",
+    listTitle: "6 - Term Sheet Signed",
+  },
+  {
+    id: "rec_3",
+    title: "Suffah Academy - Residential",
+    listTitle: "4 - Docs Collected",
+  },
+];
+
+describe("selectCandidateFromMessage", () => {
+  it("resolves numeric follow-ups", () => {
+    expect(selectCandidateFromMessage("2", candidates)?.id).toBe("rec_2");
+    expect(selectCandidateFromMessage("option 3", candidates)?.id).toBe("rec_3");
+    expect(selectCandidateFromMessage("2.", candidates)?.id).toBe("rec_2");
+  });
+
+  it("resolves ordinal follow-ups", () => {
+    expect(selectCandidateFromMessage("the second one", candidates)?.id).toBe(
+      "rec_2",
+    );
+    expect(selectCandidateFromMessage("third one", candidates)?.id).toBe("rec_3");
+    expect(selectCandidateFromMessage("last one", candidates)?.id).toBe("rec_3");
+  });
+
+  it("resolves descriptive follow-ups", () => {
+    expect(
+      selectCandidateFromMessage(
+        "the commercial one",
+        candidates,
+        "suffah academy",
+      )?.id,
+    ).toBe("rec_2");
+    expect(
+      selectCandidateFromMessage("the term sheet signed one", candidates)?.id,
+    ).toBe("rec_2");
+    expect(
+      selectCandidateFromMessage("the residential one", candidates)?.id,
+    ).toBe("rec_3");
+  });
+
+  it("falls back to the first candidate for generic pointer phrases", () => {
+    expect(selectCandidateFromMessage("that one", candidates)?.id).toBe("rec_1");
+    expect(selectCandidateFromMessage("this client", candidates)?.id).toBe(
+      "rec_1",
+    );
+  });
+
+  it("returns null when there is no reliable match", () => {
+    expect(selectCandidateFromMessage("the other lender", candidates)).toBeNull();
+  });
+});
