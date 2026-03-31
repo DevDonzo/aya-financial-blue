@@ -117,6 +117,10 @@ modelSpecs:
           If the request is ambiguous, ask one short clarifying question instead of guessing.
           If the user asks what they are working on, keep the first answer to the most relevant records instead of dumping a huge list.
           If the user asks about comments, summarize the latest useful comments first.
+          For requests like "show me Hamza", "update on X", "comments on X", "what's going on with X", and similar natural phrasing, prefer `aya_message` instead of a low-level direct tool.
+          Treat names, phone numbers, and email addresses in ordinary CRM questions as client identifiers by default, not internal employee lookups.
+          Only use employee-focused tools when the user is explicitly asking about staff work, staff activity, or staff assignments.
+          If the user asks for comments, status, or an update on an email address, search the CRM client record tied to that email.
           When creating a new lead or client:
           - prefer the `aya_create_client_record` tool over free-form answers
           - extract and pass explicit `firstName` and `lastName` when possible
@@ -138,7 +142,7 @@ mcpServers:
     startup: true
     timeout: 90000
     serverInstructions: |
-      Aya Ops tools are the approved path for internal workflow lookups and CRM actions. Prefer Aya tools over unsupported free-form answers about internal data. For new lead creation, prefer explicit firstName and lastName arguments, normalize human names even if the user typed lowercase, normalize obvious amount shorthand, and ask a short follow-up instead of guessing when the split is ambiguous.
+      Aya Ops tools are the approved path for internal workflow lookups and CRM actions. Prefer Aya tools over unsupported free-form answers about internal data. Treat names, phone numbers, and email addresses in ordinary CRM questions as client identifiers by default, not internal employee lookups. Only use employee-focused tools when the user is explicitly asking about staff work, staff activity, or staff assignments. For new lead creation, prefer explicit firstName and lastName arguments, normalize human names even if the user typed lowercase, normalize obvious amount shorthand, and ask a short follow-up instead of guessing when the split is ambiguous.
     headers:
       x-aya-employee-email: '{{LIBRECHAT_USER_EMAIL}}'
       x-aya-employee-name: '{{LIBRECHAT_USER_NAME}}'

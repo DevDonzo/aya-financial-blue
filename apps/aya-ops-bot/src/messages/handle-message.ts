@@ -385,35 +385,6 @@ export async function handleInboundMessage(
   const actor = await resolveActorFromPayload(payload);
   const transport = payload.transport ?? "http";
 
-  const pendingFollowUp = await continuePendingRecordChoice(
-    actor,
-    transport,
-    payload.message,
-  );
-  if (pendingFollowUp) {
-    await recordAudit({
-      actor,
-      transport,
-      inboundText: payload.message,
-      detectedIntent: pendingFollowUp.intent,
-      adapter: pendingFollowUp.adapter,
-      commandName: pendingFollowUp.commandName,
-      commandArgs: pendingFollowUp.commandArgs,
-      outcome: pendingFollowUp.outcome,
-      responseText: pendingFollowUp.responseText,
-      requestJson: pendingFollowUp.requestJson,
-      responseJson: pendingFollowUp.responseJson,
-    });
-
-    return {
-      matched: true,
-      intent: pendingFollowUp.intent,
-      actor,
-      responseText: pendingFollowUp.responseText,
-      data: pendingFollowUp.data,
-    };
-  }
-
   const intentRequest: IntentRequest = {
     actor,
     message: payload.message,
@@ -422,6 +393,35 @@ export async function handleInboundMessage(
 
   const match = detectIntent(intentRequest);
   if (!match) {
+    const pendingFollowUp = await continuePendingRecordChoice(
+      actor,
+      transport,
+      payload.message,
+    );
+    if (pendingFollowUp) {
+      await recordAudit({
+        actor,
+        transport,
+        inboundText: payload.message,
+        detectedIntent: pendingFollowUp.intent,
+        adapter: pendingFollowUp.adapter,
+        commandName: pendingFollowUp.commandName,
+        commandArgs: pendingFollowUp.commandArgs,
+        outcome: pendingFollowUp.outcome,
+        responseText: pendingFollowUp.responseText,
+        requestJson: pendingFollowUp.requestJson,
+        responseJson: pendingFollowUp.responseJson,
+      });
+
+      return {
+        matched: true,
+        intent: pendingFollowUp.intent,
+        actor,
+        responseText: pendingFollowUp.responseText,
+        data: pendingFollowUp.data,
+      };
+    }
+
     const responseText =
       "I could not match that request to a supported action yet.";
     await recordAudit({
@@ -553,10 +553,8 @@ export async function handleInboundMessage(
         ? `No cached Blue records matched "${query}".`
         : results
             .map(
-              (
-                item: { title: string; listTitle: string },
-                index: number,
-              ) => `${index + 1}. ${item.title} (${item.listTitle})`,
+              (item: { title: string; listTitle: string }, index: number) =>
+                `${index + 1}. ${item.title} (${item.listTitle})`,
             )
             .join("\n");
 
@@ -637,7 +635,10 @@ async function executeBlueIntent(
 ): Promise<BlueExecutionResult> {
   if (match.intent === "records.move") {
     const recordId = requireStringParameter(match.parameters, "recordId");
-    const targetListId = requireStringParameter(match.parameters, "targetListId");
+    const targetListId = requireStringParameter(
+      match.parameters,
+      "targetListId",
+    );
     const recordTitle = String(match.parameters.recordTitle);
     const targetListTitle = String(match.parameters.targetListTitle);
     const result = await moveRecord({
@@ -672,7 +673,10 @@ async function executeBlueIntent(
 
   if (match.intent === "records.create") {
     const fullName = requireStringParameter(match.parameters, "fullName");
-    const targetListId = requireStringParameter(match.parameters, "targetListId");
+    const targetListId = requireStringParameter(
+      match.parameters,
+      "targetListId",
+    );
     const targetListTitle = requireStringParameter(
       match.parameters,
       "targetListTitle",
@@ -825,7 +829,9 @@ async function executeBlueIntent(
 
   if (match.intent === "records.list_assigned") {
     const assigneeId = requireStringParameter(match.parameters, "assigneeId");
-    const employeeName = String(match.parameters.employeeName ?? actor.displayName);
+    const employeeName = String(
+      match.parameters.employeeName ?? actor.displayName,
+    );
     const result = await listAssignedOpenRecords({
       workspaceId: config.BLUE_WORKSPACE_ID,
       companyId: config.BLUE_COMPANY_ID,

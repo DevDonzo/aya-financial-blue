@@ -50,6 +50,10 @@ export async function replaceBlueRecordsCache(input: {
     listTitle: string;
     title: string;
     normalizedTitle: string;
+    contactEmail?: string | null;
+    normalizedContactEmail?: string | null;
+    contactPhone?: string | null;
+    normalizedContactPhone?: string | null;
     status?: string;
     dueAt?: string;
     updatedAt?: string | null;
@@ -74,6 +78,10 @@ export async function replaceBlueRecordsCache(input: {
           list_title: item.listTitle,
           title: item.title,
           normalized_title: item.normalizedTitle,
+          contact_email: item.contactEmail ?? null,
+          normalized_contact_email: item.normalizedContactEmail ?? null,
+          contact_phone: item.contactPhone ?? null,
+          normalized_contact_phone: item.normalizedContactPhone ?? null,
           status: item.status ?? null,
           due_at: item.dueAt ?? null,
           updated_at: item.updatedAt ?? null,
@@ -133,6 +141,10 @@ export async function upsertBlueRecordsCache(input: {
     listTitle: string;
     title: string;
     normalizedTitle: string;
+    contactEmail?: string | null;
+    normalizedContactEmail?: string | null;
+    contactPhone?: string | null;
+    normalizedContactPhone?: string | null;
     status?: string | null;
     dueAt?: string | null;
     updatedAt?: string | null;
@@ -151,6 +163,10 @@ export async function upsertBlueRecordsCache(input: {
         list_title: item.listTitle,
         title: item.title,
         normalized_title: item.normalizedTitle,
+        contact_email: item.contactEmail ?? null,
+        normalized_contact_email: item.normalizedContactEmail ?? null,
+        contact_phone: item.contactPhone ?? null,
+        normalized_contact_phone: item.normalizedContactPhone ?? null,
         status: item.status ?? null,
         due_at: item.dueAt ?? null,
         updated_at: item.updatedAt ?? null,
@@ -166,6 +182,10 @@ export async function upsertBlueRecordsCache(input: {
           list_title: item.listTitle,
           title: item.title,
           normalized_title: item.normalizedTitle,
+          contact_email: item.contactEmail ?? null,
+          normalized_contact_email: item.normalizedContactEmail ?? null,
+          contact_phone: item.contactPhone ?? null,
+          normalized_contact_phone: item.normalizedContactPhone ?? null,
           status: item.status ?? null,
           due_at: item.dueAt ?? null,
           updated_at: item.updatedAt ?? null,
@@ -239,6 +259,7 @@ export async function searchCachedBlueRecords(
 ) {
   const normalized = normalizeCacheQuery(query);
   const exact = query.trim().toLowerCase();
+  const compactDigits = query.replace(/\D+/g, "");
   const displayTitleSql = sql<string>`lower(title || ' (' || list_title || ')')`;
   return await db
     .selectFrom("blue_records_cache")
@@ -248,6 +269,10 @@ export async function searchCachedBlueRecords(
       "list_id",
       "list_title",
       "normalized_title",
+      "contact_email",
+      "normalized_contact_email",
+      "contact_phone",
+      "normalized_contact_phone",
       "status",
       "due_at",
       "updated_at",
@@ -265,6 +290,11 @@ export async function searchCachedBlueRecords(
         eb(displayTitleSql, "=", exact),
         eb(displayTitleSql, "like", `%${exact}%`),
         eb("normalized_title", "like", `%${normalized}%`),
+        eb("normalized_contact_email", "=", exact),
+        eb("normalized_contact_email", "like", `%${exact}%`),
+        ...(compactDigits
+          ? [eb("normalized_contact_phone", "like", `%${compactDigits}%`)]
+          : []),
       ]),
     )
     .orderBy(({ case: caseBuilder, fn }) =>
@@ -273,9 +303,13 @@ export async function searchCachedBlueRecords(
         .then(0)
         .when(displayTitleSql, "=", exact)
         .then(1)
-        .when("normalized_title", "=", normalized)
+        .when("normalized_contact_email", "=", exact)
         .then(2)
-        .else(3)
+        .when("normalized_contact_phone", "=", compactDigits)
+        .then(3)
+        .when("normalized_title", "=", normalized)
+        .then(4)
+        .else(5)
         .end(),
     )
     .orderBy("title", "asc")
@@ -294,7 +328,10 @@ export async function listCachedBlueRecords(workspaceId: string, limit = 25) {
     .execute();
 }
 
-export async function getCachedBlueRecordById(workspaceId: string, recordId: string) {
+export async function getCachedBlueRecordById(
+  workspaceId: string,
+  recordId: string,
+) {
   return await db
     .selectFrom("blue_records_cache")
     .select([

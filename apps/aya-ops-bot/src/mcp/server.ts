@@ -18,6 +18,12 @@ import {
   searchClients,
 } from "./service.js";
 
+const actorIdentityFields = {
+  actorEmployeeId: z.string().optional(),
+  actorEmployeeEmail: z.string().email().optional(),
+  actorEmployeeName: z.string().optional(),
+} as const;
+
 export async function handleAyaMcpRequest(
   request: IncomingMessage,
   response: ServerResponse,
@@ -61,8 +67,13 @@ async function getHeaderActor(
 
 async function requireToolActor(
   headers: Record<string, string | string[] | undefined> | undefined,
+  fallback?: {
+    employeeId?: string;
+    employeeEmail?: string;
+    employeeName?: string;
+  },
 ) {
-  const actor = await getHeaderActor(headers);
+  const actor = await getHeaderActor(headers, fallback);
   if (!actor) {
     throw new Error(
       "This Aya tool requires employee identity. Send x-aya-employee-id, x-aya-employee-email, or x-aya-employee-name.",
@@ -107,7 +118,10 @@ function createAyaMcpServer() {
       description:
         "Run one Aya bot request in natural language. Use this for normal employee chat behavior.",
       inputSchema: {
-        message: z.string().min(1).describe("Natural-language employee request"),
+        message: z
+          .string()
+          .min(1)
+          .describe("Natural-language employee request"),
         actorEmployeeId: z.string().optional(),
         actorEmployeeEmail: z.string().email().optional(),
         actorEmployeeName: z.string().optional(),
@@ -145,20 +159,26 @@ function createAyaMcpServer() {
       inputSchema: {
         query: z.string().min(1),
         limit: z.number().int().min(1).max(20).default(8),
+        ...actorIdentityFields,
       },
     },
-    async ({ query, limit }, extra) => {
-      const actor = await getHeaderActor(extra.requestInfo?.headers);
+    async (
+      { query, limit, actorEmployeeId, actorEmployeeEmail, actorEmployeeName },
+      extra,
+    ) => {
+      const actor = await getHeaderActor(extra.requestInfo?.headers, {
+        employeeId: actorEmployeeId,
+        employeeEmail: actorEmployeeEmail,
+        employeeName: actorEmployeeName,
+      });
       const result = await searchClients(query, limit, actor);
       const responseText =
         result.items.length === 0
           ? `No cached Blue clients matched "${query}".`
           : result.items
               .map(
-                (
-                  item: { title: string; listTitle: string },
-                  index: number,
-                ) => `${index + 1}. ${item.title} (${item.listTitle})`,
+                (item: { title: string; listTitle: string }, index: number) =>
+                  `${index + 1}. ${item.title} (${item.listTitle})`,
               )
               .join("\n");
 
@@ -174,16 +194,39 @@ function createAyaMcpServer() {
     {
       title: "Get Client Comments",
       description:
-        "Show recent comments for a Blue CRM record in the allowed Aya workspace `03 - AYA x Hamza/ AI`.",
+        "Show recent comments for a Blue CRM record in the allowed Aya workspace `03 - AYA x Hamza/ AI`. `clientQuery` can be a client name, record title, email, or phone number.",
       inputSchema: {
         recordId: z.string().optional(),
-        clientQuery: z.string().optional(),
+        clientQuery: z
+          .string()
+          .optional()
+          .describe("Client name, record title, email, or phone number"),
         limit: z.number().int().min(1).max(20).default(8),
+        ...actorIdentityFields,
       },
     },
-    async ({ recordId, clientQuery, limit }, extra) => {
-      const actor = await getHeaderActor(extra.requestInfo?.headers);
-      const result = await getClientComments({ recordId, clientQuery, limit, actor });
+    async (
+      {
+        recordId,
+        clientQuery,
+        limit,
+        actorEmployeeId,
+        actorEmployeeEmail,
+        actorEmployeeName,
+      },
+      extra,
+    ) => {
+      const actor = await getHeaderActor(extra.requestInfo?.headers, {
+        employeeId: actorEmployeeId,
+        employeeEmail: actorEmployeeEmail,
+        employeeName: actorEmployeeName,
+      });
+      const result = await getClientComments({
+        recordId,
+        clientQuery,
+        limit,
+        actor,
+      });
       return {
         content: [{ type: "text", text: result.responseText }],
         structuredContent: toStructuredContent(result),
@@ -196,14 +239,31 @@ function createAyaMcpServer() {
     {
       title: "Get Client Detail",
       description:
-        "Load a client's current Blue status, contact fields, and recent activity/comments.",
+        "Load a client's current Blue status, contact fields, and recent activity/comments. Use `clientQuery` for a client name, record title, email, or phone number.",
       inputSchema: {
         recordId: z.string().optional(),
-        clientQuery: z.string().optional(),
+        clientQuery: z
+          .string()
+          .optional()
+          .describe("Client name, record title, email, or phone number"),
+        ...actorIdentityFields,
       },
     },
-    async ({ recordId, clientQuery }, extra) => {
-      const actor = await getHeaderActor(extra.requestInfo?.headers);
+    async (
+      {
+        recordId,
+        clientQuery,
+        actorEmployeeId,
+        actorEmployeeEmail,
+        actorEmployeeName,
+      },
+      extra,
+    ) => {
+      const actor = await getHeaderActor(extra.requestInfo?.headers, {
+        employeeId: actorEmployeeId,
+        employeeEmail: actorEmployeeEmail,
+        employeeName: actorEmployeeName,
+      });
       const result = await getClientDetail({ recordId, clientQuery, actor });
       const contactBits = [
         result.detail.contact.phone
@@ -236,19 +296,36 @@ function createAyaMcpServer() {
     {
       title: "Employee Day Summary",
       description:
-        "Summarize one employee's logged work for a given day from the local activity store.",
+        "Summarize one internal Aya employee's logged work for a given day from the local activity store. Do not use this for CRM clients or client emails.",
       inputSchema: {
         employeeId: z.string().optional(),
         employeeEmail: z.string().email().optional(),
         employeeName: z.string().optional(),
         date: z.string().optional(),
+        ...actorIdentityFields,
       },
     },
-    async ({ employeeId, employeeEmail, employeeName, date }) => {
-      const result = await getEmployeeDaySummary({
+    async (
+      {
         employeeId,
         employeeEmail,
         employeeName,
+        date,
+        actorEmployeeId,
+        actorEmployeeEmail,
+        actorEmployeeName,
+      },
+      extra,
+    ) => {
+      const actor = await getHeaderActor(extra.requestInfo?.headers, {
+        employeeId: actorEmployeeId,
+        employeeEmail: actorEmployeeEmail,
+        employeeName: actorEmployeeName,
+      });
+      const result = await getEmployeeDaySummary({
+        employeeId: employeeId ?? actor?.employeeId,
+        employeeEmail: employeeEmail ?? actor?.email,
+        employeeName: employeeName ?? actor?.displayName,
         date,
       });
       return {
@@ -267,6 +344,7 @@ function createAyaMcpServer() {
       inputSchema: {
         date: z.string().optional(),
         inactiveOnly: z.boolean().default(false),
+        ...actorIdentityFields,
       },
     },
     async ({ date, inactiveOnly }) => {
@@ -283,18 +361,34 @@ function createAyaMcpServer() {
     {
       title: "Employee Workload",
       description:
-        "Show the current open Blue workload assigned to one employee in the allowed workspace.",
+        "Show the current open Blue workload assigned to one internal employee in the allowed workspace. Do not use this for CRM clients or client emails.",
       inputSchema: {
         employeeId: z.string().optional(),
         employeeEmail: z.string().email().optional(),
         employeeName: z.string().optional(),
+        ...actorIdentityFields,
       },
     },
-    async ({ employeeId, employeeEmail, employeeName }) => {
-      const result = await getEmployeeWorkload({
+    async (
+      {
         employeeId,
         employeeEmail,
         employeeName,
+        actorEmployeeId,
+        actorEmployeeEmail,
+        actorEmployeeName,
+      },
+      extra,
+    ) => {
+      const actor = await getHeaderActor(extra.requestInfo?.headers, {
+        employeeId: actorEmployeeId,
+        employeeEmail: actorEmployeeEmail,
+        employeeName: actorEmployeeName,
+      });
+      const result = await getEmployeeWorkload({
+        employeeId: employeeId ?? actor?.employeeId,
+        employeeEmail: employeeEmail ?? actor?.email,
+        employeeName: employeeName ?? actor?.displayName,
       });
       return {
         content: [{ type: "text", text: result.rawOutput }],
@@ -318,13 +412,30 @@ function createAyaMcpServer() {
         financeAmount: z.number().positive().optional(),
         notes: z.string().optional(),
         targetListQuery: z.string().optional(),
+        ...actorIdentityFields,
       },
     },
     async (
-      { firstName, lastName, fullName, phone, email, financeAmount, notes, targetListQuery },
+      {
+        firstName,
+        lastName,
+        fullName,
+        phone,
+        email,
+        financeAmount,
+        notes,
+        targetListQuery,
+        actorEmployeeId,
+        actorEmployeeEmail,
+        actorEmployeeName,
+      },
       extra,
     ) => {
-      await requireToolActor(extra.requestInfo?.headers);
+      await getHeaderActor(extra.requestInfo?.headers, {
+        employeeId: actorEmployeeId,
+        employeeEmail: actorEmployeeEmail,
+        employeeName: actorEmployeeName,
+      });
       const result = await createClientRecord({
         firstName,
         lastName,
@@ -351,11 +462,29 @@ function createAyaMcpServer() {
       inputSchema: {
         recordQuery: z.string().min(1),
         targetListQuery: z.string().min(1),
+        ...actorIdentityFields,
       },
     },
-    async ({ recordQuery, targetListQuery }, extra) => {
-      const actor = await requireToolActor(extra.requestInfo?.headers);
-      const result = await moveClientToStage({ recordQuery, targetListQuery, actor });
+    async (
+      {
+        recordQuery,
+        targetListQuery,
+        actorEmployeeId,
+        actorEmployeeEmail,
+        actorEmployeeName,
+      },
+      extra,
+    ) => {
+      const actor = await requireToolActor(extra.requestInfo?.headers, {
+        employeeId: actorEmployeeId,
+        employeeEmail: actorEmployeeEmail,
+        employeeName: actorEmployeeName,
+      });
+      const result = await moveClientToStage({
+        recordQuery,
+        targetListQuery,
+        actor,
+      });
       return {
         content: [{ type: "text", text: result.responseText }],
         structuredContent: toStructuredContent(result),
@@ -372,10 +501,24 @@ function createAyaMcpServer() {
       inputSchema: {
         recordQuery: z.string().min(1),
         text: z.string().min(1),
+        ...actorIdentityFields,
       },
     },
-    async ({ recordQuery, text }, extra) => {
-      const actor = await requireToolActor(extra.requestInfo?.headers);
+    async (
+      {
+        recordQuery,
+        text,
+        actorEmployeeId,
+        actorEmployeeEmail,
+        actorEmployeeName,
+      },
+      extra,
+    ) => {
+      const actor = await requireToolActor(extra.requestInfo?.headers, {
+        employeeId: actorEmployeeId,
+        employeeEmail: actorEmployeeEmail,
+        employeeName: actorEmployeeName,
+      });
       const result = await addCommentToClient({ recordQuery, text, actor });
       return {
         content: [{ type: "text", text: result.responseText }],

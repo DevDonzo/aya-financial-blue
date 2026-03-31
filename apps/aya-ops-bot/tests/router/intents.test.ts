@@ -71,6 +71,21 @@ describe("detectIntent", () => {
     });
   });
 
+  it("matches email-based comment lookup commands", () => {
+    const result = detectIntent({
+      actor,
+      message: "comments on hamza@ayafinancial.com ?",
+      nowIso: new Date().toISOString(),
+    });
+
+    expect(result).toMatchObject({
+      intent: "comments.list_recent",
+      parameters: {
+        recordQuery: "hamza@ayafinancial.com",
+      },
+    });
+  });
+
   it("matches lead creation commands", () => {
     const result = detectIntent({
       actor,

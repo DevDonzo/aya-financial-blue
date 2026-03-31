@@ -34,6 +34,10 @@ interface ParsedBlueRecord {
   listTitle: string;
   title: string;
   normalizedTitle: string;
+  contactEmail?: string | null;
+  normalizedContactEmail?: string | null;
+  contactPhone?: string | null;
+  normalizedContactPhone?: string | null;
   status?: string;
   dueAt?: string;
   updatedAt?: string | null;
@@ -46,7 +50,8 @@ export async function syncWorkspaceIndex(input?: { forceFull?: boolean }) {
   const workspaceId = config.BLUE_WORKSPACE_ID;
   const state = await getBlueSyncState(workspaceId, "records");
   const nowIso = new Date().toISOString();
-  const fullReconcileMs = config.WORKSPACE_FULL_RECONCILE_HOURS * 60 * 60 * 1000;
+  const fullReconcileMs =
+    config.WORKSPACE_FULL_RECONCILE_HOURS * 60 * 60 * 1000;
   const shouldFullSync =
     Boolean(input?.forceFull) ||
     !state?.last_full_sync_at ||
@@ -80,13 +85,22 @@ export async function syncWorkspaceIndex(input?: { forceFull?: boolean }) {
     });
 
     for (const record of records) {
+      const contact = extractRecordContact(record.customFields ?? []);
       changedRecords.push({
         id: record.id,
         listId: record.todoList.id,
         listTitle: record.todoList.title,
         title: record.title,
         normalizedTitle: normalizeEntityText(record.title),
-        status: record.archived ? "Archived" : record.done ? "Completed" : "Active",
+        contactEmail: contact.email,
+        normalizedContactEmail: normalizeEmail(contact.email),
+        contactPhone: contact.phone,
+        normalizedContactPhone: normalizePhone(contact.phone),
+        status: record.archived
+          ? "Archived"
+          : record.done
+            ? "Completed"
+            : "Active",
         dueAt: record.duedAt ?? undefined,
         updatedAt: record.updatedAt,
         archived: record.archived,
@@ -118,15 +132,23 @@ export async function syncWorkspaceIndex(input?: { forceFull?: boolean }) {
     });
   }
 
-  const lastSeenUpdatedAt = [...lists.map((item) => item.updatedAt), ...changedRecords.map((item) => item.updatedAt ?? null)]
-    .filter((value): value is string => Boolean(value))
-    .sort()
-    .at(-1) ?? state?.last_seen_updated_at ?? null;
+  const lastSeenUpdatedAt =
+    [
+      ...lists.map((item) => item.updatedAt),
+      ...changedRecords.map((item) => item.updatedAt ?? null),
+    ]
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1) ??
+    state?.last_seen_updated_at ??
+    null;
 
   await upsertBlueSyncState({
     workspaceId,
     entityType: "records",
-    lastFullSyncAt: shouldFullSync ? nowIso : state?.last_full_sync_at ?? null,
+    lastFullSyncAt: shouldFullSync
+      ? nowIso
+      : (state?.last_full_sync_at ?? null),
     lastIncrementalSyncAt: nowIso,
     lastSeenUpdatedAt,
   });
@@ -179,16 +201,16 @@ export async function resolveListQuery(query: string) {
 }
 
 export async function resolveRecordQuery(query: string) {
-  const matches = (await searchCachedBlueRecords(
-    config.BLUE_WORKSPACE_ID,
-    query,
-    5,
-  )).map((record) => ({
+  const matches = (
+    await searchCachedBlueRecords(config.BLUE_WORKSPACE_ID, query, 5)
+  ).map((record) => ({
     ...record,
     score: scoreRecordMatch(
       record.title,
       record.list_title,
       record.normalized_title,
+      record.normalized_contact_email,
+      record.normalized_contact_phone,
       query,
     ),
   }));
@@ -226,15 +248,15 @@ export async function resolveRecordQuery(query: string) {
 }
 
 export async function searchRecordQuery(query: string, limit = 5) {
-  return (await searchCachedBlueRecords(config.BLUE_WORKSPACE_ID, query, limit)).map(
-    (record) => ({
-      id: record.id,
-      title: record.title,
-      listTitle: record.list_title,
-      status: record.status,
-      dueAt: record.due_at,
-    }),
-  );
+  return (
+    await searchCachedBlueRecords(config.BLUE_WORKSPACE_ID, query, limit)
+  ).map((record) => ({
+    id: record.id,
+    title: record.title,
+    listTitle: record.list_title,
+    status: record.status,
+    dueAt: record.due_at,
+  }));
 }
 
 export async function listIndexedRecords(limit = 25) {
@@ -250,7 +272,10 @@ export async function listIndexedRecords(limit = 25) {
 }
 
 export async function getIndexedRecord(recordId: string) {
-  const record = await getCachedBlueRecordById(config.BLUE_WORKSPACE_ID, recordId);
+  const record = await getCachedBlueRecordById(
+    config.BLUE_WORKSPACE_ID,
+    recordId,
+  );
   if (!record) {
     return null;
   }
@@ -272,6 +297,51 @@ function normalizeEntityText(input: string) {
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizeEmail(input?: string | null) {
+  const value = input?.trim().toLowerCase();
+  return value || null;
+}
+
+function normalizePhone(input?: string | null) {
+  const digits = input?.replace(/\D+/g, "");
+  return digits || null;
+}
+
+function extractRecordContact(
+  fields: Array<{ name?: string | null; value?: unknown }>,
+) {
+  let email: string | null = null;
+  let phone: string | null = null;
+
+  for (const field of fields) {
+    const label = String(field.name ?? "")
+      .trim()
+      .toLowerCase();
+    const value = normalizeFieldValue(field.value);
+    if (!value) {
+      continue;
+    }
+
+    if (label === "email") {
+      email = value;
+    } else if (label === "phone") {
+      phone = value;
+    }
+  }
+
+  return { email, phone };
+}
+
+function normalizeFieldValue(value: unknown) {
+  if (value == null) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return value === "(empty)" ? "" : value.trim();
+  }
+  return JSON.stringify(value);
 }
 
 function scoreListMatch(
@@ -297,11 +367,27 @@ function scoreRecordMatch(
   title: string,
   listTitle: string,
   normalizedTitle: string,
+  normalizedContactEmail: string | null,
+  normalizedContactPhone: string | null,
   rawQuery: string,
 ) {
   const normalizedQuery = normalizeEntityText(rawQuery);
+  const normalizedPhoneQuery = rawQuery.replace(/\D+/g, "");
   const displayTitle = `${title} (${listTitle})`;
   const normalizedDisplayTitle = normalizeEntityText(displayTitle);
+  if (
+    normalizedContactEmail &&
+    normalizedContactEmail === rawQuery.trim().toLowerCase()
+  ) {
+    return 98;
+  }
+  if (
+    normalizedContactPhone &&
+    normalizedPhoneQuery &&
+    normalizedContactPhone === normalizedPhoneQuery
+  ) {
+    return 97;
+  }
   if (normalizedTitle === normalizedQuery) {
     return 100;
   }
@@ -319,6 +405,19 @@ function scoreRecordMatch(
   }
   if (normalizedDisplayTitle.includes(normalizedQuery)) {
     return 79;
+  }
+  if (
+    normalizedContactEmail &&
+    normalizedContactEmail.includes(rawQuery.trim().toLowerCase())
+  ) {
+    return 78;
+  }
+  if (
+    normalizedContactPhone &&
+    normalizedPhoneQuery &&
+    normalizedContactPhone.includes(normalizedPhoneQuery)
+  ) {
+    return 77;
   }
   if (title.toLowerCase().includes(rawQuery.trim().toLowerCase())) {
     return 70;

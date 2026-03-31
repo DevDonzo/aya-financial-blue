@@ -56,6 +56,10 @@ export interface BlueRecordsCacheTable {
   list_title: string;
   title: string;
   normalized_title: string;
+  contact_email: string | null;
+  normalized_contact_email: string | null;
+  contact_phone: string | null;
+  normalized_contact_phone: string | null;
   status: string | null;
   due_at: string | null;
   updated_at: string | null;

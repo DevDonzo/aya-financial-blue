@@ -129,15 +129,22 @@ export function detectIntent(request: IntentRequest): IntentMatch | null {
   }
 
   const commentQuery =
-    message.match(
-      /^(?:show|list|get)\s+(?:recent\s+)?comments?\s+(?:for|on)\s+(.+?)[.?!]?$/i,
-    )?.[1]?.trim() ??
-    message.match(
-      /^(?:what(?:'s| is)\s+in|what are)\s+the\s+comments?\s+(?:for|on)\s+(.+?)[.?!]?$/i,
-    )?.[1]?.trim() ??
-    message.match(
-      /^(?:show|list|get)\s+(?:me\s+)?the\s+comments?\s+(?:for|on)\s+(.+?)[.?!]?$/i,
-    )?.[1]?.trim();
+    message
+      .match(
+        /^(?:show|list|get)\s+(?:recent\s+)?comments?\s+(?:for|on)\s+(.+?)[.?!]?$/i,
+      )?.[1]
+      ?.trim() ??
+    message.match(/^comments?\s+(?:for|on)\s+(.+?)[.?!]?$/i)?.[1]?.trim() ??
+    message
+      .match(
+        /^(?:what(?:'s| is)\s+in|what are)\s+the\s+comments?\s+(?:for|on)\s+(.+?)[.?!]?$/i,
+      )?.[1]
+      ?.trim() ??
+    message
+      .match(
+        /^(?:show|list|get)\s+(?:me\s+)?the\s+comments?\s+(?:for|on)\s+(.+?)[.?!]?$/i,
+      )?.[1]
+      ?.trim();
 
   if (commentQuery) {
     return {
@@ -202,8 +209,9 @@ export function detectIntent(request: IntentRequest): IntentMatch | null {
 
 function extractCreateLeadParameters(message: string) {
   const startsCreateLead =
-    /^(?:create|add)\s+(?:a\s+)?(?:new\s+)?(?:lead|client|record)\b/.test(message) ||
-    /^new\s+(?:lead|client|record)\b/.test(message);
+    /^(?:create|add)\s+(?:a\s+)?(?:new\s+)?(?:lead|client|record)\b/.test(
+      message,
+    ) || /^new\s+(?:lead|client|record)\b/.test(message);
 
   if (!startsCreateLead) {
     return null;
@@ -212,8 +220,9 @@ function extractCreateLeadParameters(message: string) {
   const email =
     message.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i)?.[0] ?? undefined;
   const phone =
-    message.match(/(?:phone|number)\s+(?:is\s+)?([+]?\d[\d\s().-]{6,})/i)?.[1]?.trim() ??
-    undefined;
+    message
+      .match(/(?:phone|number)\s+(?:is\s+)?([+]?\d[\d\s().-]{6,})/i)?.[1]
+      ?.trim() ?? undefined;
   const amount =
     message.match(
       /(?:amount|finance amount|loan amount|mortgage amount)\s+(?:is\s+)?\$?([\d,]+(?:\.\d+)?)/i,
@@ -221,20 +230,28 @@ function extractCreateLeadParameters(message: string) {
   const notes =
     message.match(/(?:notes?|note)\s*[:\-]\s*(.+)$/i)?.[1]?.trim() ?? undefined;
   const targetListQuery =
-    message.match(
-      /(?:in|to)\s+(?:list|stage)\s+(.+?)(?=,|\s+phone\s+|\s+email\s+|\s+amount\s+|\s+notes?\s*[:\-]|$)/i,
-    )?.[1]?.trim() ?? undefined;
+    message
+      .match(
+        /(?:in|to)\s+(?:list|stage)\s+(.+?)(?=,|\s+phone\s+|\s+email\s+|\s+amount\s+|\s+notes?\s*[:\-]|$)/i,
+      )?.[1]
+      ?.trim() ?? undefined;
 
   const fullName =
-    message.match(
-      /named\s+(.+?)(?=,|\s+with\s+|\s+phone\s+|\s+email\s+|\s+amount\s+|\s+(?:in|to)\s+(?:list|stage)\s+|\s+notes?\s*[:\-]|$)/i,
-    )?.[1]?.trim() ??
-    message.match(
-      /^(?:create|add)\s+(?:a\s+)?(?:new\s+)?(?:lead|client|record)\s+(.+?)(?=,|\s+with\s+|\s+phone\s+|\s+email\s+|\s+amount\s+|\s+(?:in|to)\s+(?:list|stage)\s+|\s+notes?\s*[:\-]|$)/i,
-    )?.[1]?.trim() ??
-    message.match(
-      /^new\s+(?:lead|client|record)\s+(.+?)(?=,|\s+with\s+|\s+phone\s+|\s+email\s+|\s+amount\s+|\s+(?:in|to)\s+(?:list|stage)\s+|\s+notes?\s*[:\-]|$)/i,
-    )?.[1]?.trim() ??
+    message
+      .match(
+        /named\s+(.+?)(?=,|\s+with\s+|\s+phone\s+|\s+email\s+|\s+amount\s+|\s+(?:in|to)\s+(?:list|stage)\s+|\s+notes?\s*[:\-]|$)/i,
+      )?.[1]
+      ?.trim() ??
+    message
+      .match(
+        /^(?:create|add)\s+(?:a\s+)?(?:new\s+)?(?:lead|client|record)\s+(.+?)(?=,|\s+with\s+|\s+phone\s+|\s+email\s+|\s+amount\s+|\s+(?:in|to)\s+(?:list|stage)\s+|\s+notes?\s*[:\-]|$)/i,
+      )?.[1]
+      ?.trim() ??
+    message
+      .match(
+        /^new\s+(?:lead|client|record)\s+(.+?)(?=,|\s+with\s+|\s+phone\s+|\s+email\s+|\s+amount\s+|\s+(?:in|to)\s+(?:list|stage)\s+|\s+notes?\s*[:\-]|$)/i,
+      )?.[1]
+      ?.trim() ??
     undefined;
 
   return {

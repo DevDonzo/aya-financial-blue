@@ -1,4 +1,12 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 
@@ -62,7 +70,20 @@ const server = setupServer(
                   updatedAt: "2026-03-25T01:00:00.000Z",
                   users: [],
                   tags: [],
-                  customFields: [],
+                  customFields: [
+                    {
+                      id: "cf_email",
+                      name: "Email",
+                      type: "TEXT",
+                      value: "hamza@ayafinancial.com",
+                    },
+                    {
+                      id: "cf_phone",
+                      name: "Phone",
+                      type: "TEXT",
+                      value: "6475683720",
+                    },
+                  ],
                   todoList: {
                     id: "list_1",
                     uid: "list_uid_1",
@@ -98,7 +119,20 @@ const server = setupServer(
                 updatedAt: "2026-03-25T00:00:00.000Z",
                 users: [],
                 tags: [],
-                customFields: [],
+                customFields: [
+                  {
+                    id: "cf_email",
+                    name: "Email",
+                    type: "TEXT",
+                    value: "hamza@ayafinancial.com",
+                  },
+                  {
+                    id: "cf_phone",
+                    name: "Phone",
+                    type: "TEXT",
+                    value: "6475683720",
+                  },
+                ],
                 todoList: {
                   id: "list_1",
                   uid: "list_uid_1",
@@ -130,14 +164,19 @@ describe("syncWorkspaceIndex", () => {
     const env = createTestEnvironment();
     try {
       vi.resetModules();
-      const { syncWorkspaceIndex, getIndexedRecord } = await import("../../src/blue/workspace-index.js");
+      const { syncWorkspaceIndex, getIndexedRecord, resolveRecordQuery } =
+        await import("../../src/blue/workspace-index.js");
 
       const result = await syncWorkspaceIndex();
       const cached = await getIndexedRecord("todo_1");
+      const byEmail = await resolveRecordQuery("hamza@ayafinancial.com");
+      const byPhone = await resolveRecordQuery("6475683720");
 
       expect(result.mode).toBe("full");
       expect(result.recordsSynced).toBe(1);
       expect(cached?.title).toBe("Sheraz initial");
+      expect(byEmail?.match?.id).toBe("todo_1");
+      expect(byPhone?.match?.id).toBe("todo_1");
     } finally {
       env.cleanup();
     }
@@ -147,7 +186,8 @@ describe("syncWorkspaceIndex", () => {
     const env = createTestEnvironment();
     try {
       vi.resetModules();
-      const { syncWorkspaceIndex, getIndexedRecord } = await import("../../src/blue/workspace-index.js");
+      const { syncWorkspaceIndex, getIndexedRecord } =
+        await import("../../src/blue/workspace-index.js");
 
       await syncWorkspaceIndex();
       phase = "incremental";
@@ -166,7 +206,8 @@ describe("syncWorkspaceIndex", () => {
     try {
       phase = "retry";
       vi.resetModules();
-      const { syncWorkspaceIndex } = await import("../../src/blue/workspace-index.js");
+      const { syncWorkspaceIndex } =
+        await import("../../src/blue/workspace-index.js");
 
       const result = await syncWorkspaceIndex();
 
@@ -177,4 +218,3 @@ describe("syncWorkspaceIndex", () => {
     }
   });
 });
-

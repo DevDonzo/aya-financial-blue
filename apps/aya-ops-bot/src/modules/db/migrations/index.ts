@@ -62,6 +62,10 @@ export async function runMigrations() {
       list_title TEXT NOT NULL,
       title TEXT NOT NULL,
       normalized_title TEXT NOT NULL,
+      contact_email TEXT,
+      normalized_contact_email TEXT,
+      contact_phone TEXT,
+      normalized_contact_phone TEXT,
       status TEXT,
       due_at TEXT,
       updated_at TEXT,
@@ -179,15 +183,30 @@ export async function runMigrations() {
   ensureColumn("blue_lists_cache", "updated_at", "TEXT");
   ensureColumn("blue_lists_cache", "deleted_at", "TEXT");
   ensureColumn("blue_records_cache", "updated_at", "TEXT");
+  ensureColumn("blue_records_cache", "contact_email", "TEXT");
+  ensureColumn("blue_records_cache", "normalized_contact_email", "TEXT");
+  ensureColumn("blue_records_cache", "contact_phone", "TEXT");
+  ensureColumn("blue_records_cache", "normalized_contact_phone", "TEXT");
   ensureColumn("blue_records_cache", "archived", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn("blue_records_cache", "done", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn("blue_records_cache", "raw_json", "TEXT");
   ensureColumn("blue_records_cache", "deleted_at", "TEXT");
   ensureColumn("bot_audit_logs", "request_json", "TEXT");
   ensureColumn("bot_audit_logs", "response_json", "TEXT");
+
+  sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS idx_blue_records_cache_contact_email
+      ON blue_records_cache(workspace_id, normalized_contact_email);
+    CREATE INDEX IF NOT EXISTS idx_blue_records_cache_contact_phone
+      ON blue_records_cache(workspace_id, normalized_contact_phone);
+  `);
 }
 
-function ensureColumn(tableName: string, columnName: string, definition: string) {
+function ensureColumn(
+  tableName: string,
+  columnName: string,
+  definition: string,
+) {
   const rows = sqlite
     .prepare(`PRAGMA table_info(${tableName})`)
     .all() as Array<{ name: string }>;

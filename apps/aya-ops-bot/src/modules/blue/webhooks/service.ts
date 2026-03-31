@@ -160,7 +160,10 @@ async function repairCommentCacheFromWebhook(
 }
 
 async function refreshRecordCache(recordId: string) {
-  const { record } = await fetchRecordDetail(config.BLUE_WORKSPACE_ID, recordId);
+  const { record } = await fetchRecordDetail(
+    config.BLUE_WORKSPACE_ID,
+    recordId,
+  );
   if (!record) {
     await softDeleteBlueRecordById(config.BLUE_WORKSPACE_ID, recordId);
     return;
@@ -188,7 +191,19 @@ async function refreshRecordCache(recordId: string) {
         listTitle: record.todoList.title,
         title: record.title,
         normalizedTitle: normalizeEntityText(record.title),
-        status: record.archived ? "Archived" : record.done ? "Completed" : "Active",
+        contactEmail: extractContactEmail(record.customFields ?? []),
+        normalizedContactEmail: normalizeEmail(
+          extractContactEmail(record.customFields ?? []),
+        ),
+        contactPhone: extractContactPhone(record.customFields ?? []),
+        normalizedContactPhone: normalizePhone(
+          extractContactPhone(record.customFields ?? []),
+        ),
+        status: record.archived
+          ? "Archived"
+          : record.done
+            ? "Completed"
+            : "Active",
         dueAt: record.duedAt ?? null,
         updatedAt: record.updatedAt,
         archived: record.archived,
@@ -207,16 +222,14 @@ async function refreshRecordCache(recordId: string) {
 }
 
 async function maybeEnsureWebhookActor(
-  actor:
-    | {
-        id: string;
-        fullName?: string;
-        firstName?: string;
-        lastName?: string;
-        email?: string;
-        timezone?: string | null;
-      }
-    | null,
+  actor: {
+    id: string;
+    fullName?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    timezone?: string | null;
+  } | null,
 ) {
   if (!actor?.id) {
     return;
@@ -273,20 +286,12 @@ function extractWebhookMeta(
     firstString(data.id, payload.id, comment?.id, todo?.id) ??
     `${eventName}_${occurredAt}`;
   const entityId = comment?.id ?? todo?.id ?? null;
-  const entityType = comment?.id
-    ? "comment"
-    : todo?.id
-      ? "record"
-      : "activity";
+  const entityType = comment?.id ? "comment" : todo?.id ? "record" : "activity";
   const entityTitle =
     firstString(comment?.text, todo?.title, eventName) ?? eventName;
   const summary =
-    firstString(
-      data.summary,
-      payload.summary,
-      comment?.text,
-      todo?.title,
-    ) ?? `${eventName} in Blue`;
+    firstString(data.summary, payload.summary, comment?.text, todo?.title) ??
+    `${eventName} in Blue`;
 
   return {
     eventId,
@@ -300,9 +305,66 @@ function extractWebhookMeta(
   };
 }
 
+function extractContactEmail(
+  fields: Array<{ name?: string | null; value?: unknown }>,
+) {
+  return extractContactField(fields, "email");
+}
+
+function extractContactPhone(
+  fields: Array<{ name?: string | null; value?: unknown }>,
+) {
+  return extractContactField(fields, "phone");
+}
+
+function extractContactField(
+  fields: Array<{ name?: string | null; value?: unknown }>,
+  targetLabel: string,
+) {
+  for (const field of fields) {
+    const label = String(field.name ?? "")
+      .trim()
+      .toLowerCase();
+    if (label !== targetLabel) {
+      continue;
+    }
+
+    const value = normalizeFieldValue(field.value);
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function normalizeFieldValue(value: unknown) {
+  if (value == null) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return value === "(empty)" ? "" : value.trim();
+  }
+  return JSON.stringify(value);
+}
+
+function normalizeEmail(value?: string | null) {
+  const normalized = value?.trim().toLowerCase();
+  return normalized || null;
+}
+
+function normalizePhone(value?: string | null) {
+  const normalized = value?.replace(/\D+/g, "");
+  return normalized || null;
+}
+
 function findNestedUser(value: unknown) {
   for (const candidate of findObjectCandidates(value)) {
-    const id = firstString(candidate.id, candidate.userId, candidate.createdById);
+    const id = firstString(
+      candidate.id,
+      candidate.userId,
+      candidate.createdById,
+    );
     const email = firstString(candidate.email);
     const fullName = firstString(candidate.fullName, candidate.name);
     const firstName = firstString(candidate.firstName);
@@ -338,7 +400,11 @@ function findNestedComment(value: unknown) {
   for (const candidate of findObjectCandidates(value)) {
     const id = firstString(candidate.commentId, candidate.id);
     const text = firstString(candidate.text, candidate.body, candidate.comment);
-    const todoId = firstString(candidate.todoId, candidate.categoryId, candidate.recordId);
+    const todoId = firstString(
+      candidate.todoId,
+      candidate.categoryId,
+      candidate.recordId,
+    );
     if (!id && !text) {
       continue;
     }
@@ -381,7 +447,9 @@ function parseSignature(signature?: string | string[]) {
     return null;
   }
 
-  const normalized = raw.startsWith("sha256=") ? raw.slice("sha256=".length) : raw;
+  const normalized = raw.startsWith("sha256=")
+    ? raw.slice("sha256=".length)
+    : raw;
   if (!/^[0-9a-fA-F]+$/.test(normalized) || normalized.length % 2 !== 0) {
     throw new ValidationError("Invalid webhook signature format");
   }
