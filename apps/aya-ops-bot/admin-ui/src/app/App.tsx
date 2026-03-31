@@ -8,7 +8,6 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Modal } from "../components/Modal";
 import { EmployeeActivityTable } from "../features/activity/EmployeeActivityTable";
-import { CommandCenter } from "../features/dashboard/CommandCenter";
 import { IdentityLinksManager } from "../features/identity/IdentityLinksManager";
 import { SyncControlCenter } from "../features/sync/SyncControlCenter";
 import {
@@ -50,13 +49,13 @@ type DirectoryEmployee = {
 
 export function App() {
   const queryClient = useQueryClient();
-  const [activeView, setActiveView] = useState<AdminView>("operations");
+  const [activeView, setActiveView] = useState<AdminView>("audit");
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [logSearch, setLogSearch] = useState("");
   const [outcomeFilter, setOutcomeFilter] = useState("");
-  const [expandedTranscriptIds, setExpandedTranscriptIds] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [expandedTranscriptIds, setExpandedTranscriptIds] = useState<
+    Set<string>
+  >(() => new Set());
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
   const [runningAction, setRunningAction] = useState<string | null>(null);
@@ -236,7 +235,9 @@ export function App() {
 
     if (
       selectedEmployeeId &&
-      employeeDirectory.some((employee) => employee.employeeId === selectedEmployeeId)
+      employeeDirectory.some(
+        (employee) => employee.employeeId === selectedEmployeeId,
+      )
     ) {
       return;
     }
@@ -300,18 +301,20 @@ export function App() {
 
   return (
     <main className="shell">
-      <section className="hero">
-        <div>
-          <p className="eyebrow">Aya Ops Bot</p>
-          <h1>Admin Console</h1>
-          <p className="lede">
-            Review employee conversations, inspect bot replies, and monitor
-            operational state from one internal console.
-          </p>
+      <section className="topbar panel">
+        <div className="topbar-main">
+          <div className="topbar-badge">Aya Admin</div>
+          <div>
+            <h1>Audit and operations console</h1>
+            <p className="lede">
+              Review employee conversations, inspect bot replies, and manage
+              rollout from one internal workspace.
+            </p>
+          </div>
         </div>
-        <div className="hero-actions">
+        <div className="topbar-actions">
           {isAdmin ? (
-            <div className="hero-status">
+            <div className="topbar-status">
               <div className="hero-status-label">Last sync</div>
               <div className="hero-status-value">
                 {formatAdminTime(latestSyncAt ?? null)}
@@ -340,14 +343,17 @@ export function App() {
       </section>
 
       {error ? <div className="error-banner">{error}</div> : null}
-      {loading ? <div className="loading-bar">Loading Aya admin data…</div> : null}
+      {loading ? (
+        <div className="loading-bar">Loading Aya admin data…</div>
+      ) : null}
 
       {!isAdmin ? (
         <section className="panel login-panel">
           <div className="panel-head">
             <h2>Admin Login</h2>
             <p className="muted">
-              Sign in to review employee conversations, bot outputs, and operational status.
+              Sign in to review employee conversations, bot outputs, and
+              operational status.
             </p>
           </div>
           <form
@@ -393,11 +399,11 @@ export function App() {
         <section className="workspace-shell">
           <aside className="app-sidebar panel">
             <div className="sidebar-section">
-              <div className="sidebar-label">Workspace</div>
-              <div className="sidebar-title">Aya Internal Admin</div>
+              <div className="sidebar-label">Aya Internal</div>
+              <div className="sidebar-title">Admin workspace</div>
               <p className="sidebar-copy">
-                Audit conversations, review bot actions, and manage the pilot from one
-                dark operator console.
+                Clean audit-first access to conversations, replies, sync state,
+                and identity links.
               </p>
             </div>
             <nav className="view-tabs">
@@ -422,27 +428,24 @@ export function App() {
                 onClick={() => setActiveView("identity")}
               />
             </nav>
-            <div className="sidebar-section sidebar-footnote">
-              <div className="sidebar-label">Scope</div>
-              <p className="sidebar-copy">
-                Employee audit trails, Aya bot outputs, and Blue copy-workspace operations.
-              </p>
-            </div>
-            <div className="sidebar-section sidebar-footnote">
-              <div className="sidebar-label">Rollout Path</div>
-              <ul className="sidebar-list">
-                {ROLLOUT_STEPS.map((step) => (
-                  <li key={step}>{step}</li>
-                ))}
-              </ul>
-            </div>
-            <div className="sidebar-section sidebar-footnote">
-              <div className="sidebar-label">Adoption Priorities</div>
-              <ul className="sidebar-list">
-                {ADOPTION_PRIORITIES.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
+            <div className="sidebar-section sidebar-footnote sidebar-summary-card">
+              <div className="sidebar-label">Live status</div>
+              <div className="sidebar-summary-row">
+                <span>Employees</span>
+                <strong>{employeeDirectory.length}</strong>
+              </div>
+              <div className="sidebar-summary-row">
+                <span>Interactions today</span>
+                <strong>
+                  {overviewQuery.data?.overview.totalInteractions ?? 0}
+                </strong>
+              </div>
+              <div className="sidebar-summary-row">
+                <span>Active today</span>
+                <strong>
+                  {overviewQuery.data?.overview.activeEmployees ?? 0}
+                </strong>
+              </div>
             </div>
           </aside>
 
@@ -454,10 +457,13 @@ export function App() {
                     <div>
                       <h2>Employees</h2>
                       <p className="muted">
-                        Pick an employee to review their chats and bot responses.
+                        Pick an employee to review their chats and bot
+                        responses.
                       </p>
                     </div>
-                    <span className="sidebar-count">{employeeDirectory.length}</span>
+                    <span className="sidebar-count">
+                      {employeeDirectory.length}
+                    </span>
                   </div>
                   <input
                     value={employeeSearch}
@@ -467,16 +473,22 @@ export function App() {
                   />
                   <div className="employee-list">
                     {employeeDirectory.length === 0 ? (
-                      <div className="empty-state">No employees matched that search.</div>
+                      <div className="empty-state">
+                        No employees matched that search.
+                      </div>
                     ) : (
                       employeeDirectory.map((employee) => (
                         <button
                           type="button"
                           key={employee.employeeId}
                           className={`employee-card ${
-                            employee.employeeId === selectedEmployeeId ? "selected" : ""
+                            employee.employeeId === selectedEmployeeId
+                              ? "selected"
+                              : ""
                           }`}
-                          onClick={() => setSelectedEmployeeId(employee.employeeId)}
+                          onClick={() =>
+                            setSelectedEmployeeId(employee.employeeId)
+                          }
                         >
                           <div className="employee-card-top">
                             <strong>{employee.displayName}</strong>
@@ -485,7 +497,9 @@ export function App() {
                             </span>
                           </div>
                           <div className="employee-card-meta">
-                            <span>{employee.transcriptCount} conversations</span>
+                            <span>
+                              {employee.transcriptCount} conversations
+                            </span>
                             <span>{employee.logCount} bot interactions</span>
                           </div>
                           <div className="employee-card-meta">
@@ -494,7 +508,9 @@ export function App() {
                           </div>
                           <div className="employee-card-meta">
                             <span>Latest</span>
-                            <span>{formatAdminTime(employee.latestInteractionAt)}</span>
+                            <span>
+                              {formatAdminTime(employee.latestInteractionAt)}
+                            </span>
                           </div>
                         </button>
                       ))
@@ -507,7 +523,10 @@ export function App() {
                     <div className="selected-summary-head">
                       <div>
                         <div className="sidebar-label">Selected Employee</div>
-                        <h2>{selectedEmployee?.displayName ?? "Select an employee"}</h2>
+                        <h2>
+                          {selectedEmployee?.displayName ??
+                            "Select an employee"}
+                        </h2>
                         <p className="muted">
                           {selectedEmployee?.email || "No synced email on file"}
                         </p>
@@ -532,6 +551,12 @@ export function App() {
                           label="Success Rate"
                           value={`${selectedEmployee.successRate.toFixed(0)}%`}
                         />
+                        <MetricCard
+                          label="Last Activity"
+                          value={formatAdminTime(
+                            selectedEmployee.latestInteractionAt,
+                          )}
+                        />
                       </div>
                     ) : (
                       <div className="empty-state">
@@ -545,13 +570,16 @@ export function App() {
                       <div>
                         <h2>Bot Replies & Actions</h2>
                         <p className="muted">
-                          Every prompt sent to Aya and exactly what Aya returned.
+                          Every prompt sent to Aya and exactly what Aya
+                          returned.
                         </p>
                       </div>
                       <div className="filter-grid compact">
                         <select
                           value={outcomeFilter}
-                          onChange={(event) => setOutcomeFilter(event.target.value)}
+                          onChange={(event) =>
+                            setOutcomeFilter(event.target.value)
+                          }
                         >
                           <option value="">All outcomes</option>
                           <option value="success">success</option>
@@ -576,11 +604,15 @@ export function App() {
                           <article className="audit-card" key={row.id}>
                             <div className="audit-card-head">
                               <div>
-                                <strong>{row.display_name ?? "Unknown employee"}</strong>
+                                <strong>
+                                  {row.display_name ?? "Unknown employee"}
+                                </strong>
                                 <div className="audit-meta">
                                   {formatAdminTime(row.created_at)}
                                   <span>•</span>
-                                  <span>{row.detected_intent ?? "unmatched"}</span>
+                                  <span>
+                                    {row.detected_intent ?? "unmatched"}
+                                  </span>
                                 </div>
                               </div>
                               <div className="audit-actions">
@@ -619,7 +651,8 @@ export function App() {
                       <div>
                         <h2>LibreChat Conversations</h2>
                         <p className="muted">
-                          Full conversation context from LibreChat for the selected employee.
+                          Full conversation context from LibreChat for the
+                          selected employee.
                         </p>
                       </div>
                     </div>
@@ -627,24 +660,38 @@ export function App() {
                     <div className="conversation-stack">
                       {selectedTranscripts.length === 0 ? (
                         <div className="empty-state">
-                          No LibreChat conversations were found for this employee.
+                          No LibreChat conversations were found for this
+                          employee.
                         </div>
                       ) : (
                         selectedTranscripts.map((row) => {
-                          const expanded = expandedTranscriptIds.has(row.conversationId);
-                          const visibleMessages = expanded ? row.messages : row.messages.slice(-4);
+                          const expanded = expandedTranscriptIds.has(
+                            row.conversationId,
+                          );
+                          const visibleMessages = expanded
+                            ? row.messages
+                            : row.messages.slice(-4);
                           return (
-                            <article className="conversation-card" key={row.conversationId}>
+                            <article
+                              className="conversation-card"
+                              key={row.conversationId}
+                            >
                               <div className="conversation-head">
                                 <div>
-                                  <strong>{row.title || "Untitled conversation"}</strong>
+                                  <strong>
+                                    {row.title || "Untitled conversation"}
+                                  </strong>
                                   <div className="audit-meta">
-                                    {row.employeeName || row.employeeEmail || "Unknown employee"}
+                                    {row.employeeName ||
+                                      row.employeeEmail ||
+                                      "Unknown employee"}
                                     <span>•</span>
                                     <span>{row.model || "Unknown model"}</span>
                                     <span>•</span>
                                     <span>
-                                      {formatAdminTime(row.updatedAt ?? row.createdAt)}
+                                      {formatAdminTime(
+                                        row.updatedAt ?? row.createdAt,
+                                      )}
                                     </span>
                                   </div>
                                 </div>
@@ -671,10 +718,14 @@ export function App() {
                                   <div
                                     key={`${row.conversationId}-${index}`}
                                     className={`message-bubble ${
-                                      message.isCreatedByUser ? "user" : "assistant"
+                                      message.isCreatedByUser
+                                        ? "user"
+                                        : "assistant"
                                     }`}
                                   >
-                                    <div className="message-sender">{message.sender}</div>
+                                    <div className="message-sender">
+                                      {message.sender}
+                                    </div>
                                     <div>{message.text || "Empty message"}</div>
                                   </div>
                                 ))}
@@ -705,19 +756,98 @@ export function App() {
                     value={overviewQuery.data?.overview.totalInteractions ?? 0}
                   />
                 </section>
-                <EmployeeActivityTable data={employeeActivityQuery.data?.items ?? []} />
+                <EmployeeActivityTable
+                  data={employeeActivityQuery.data?.items ?? []}
+                />
               </>
             ) : null}
 
             {activeView === "operations" ? (
               <>
-                <CommandCenter
-                  overview={overviewQuery.data?.overview}
-                  employees={employeeDirectory}
-                  activity={employeeActivityQuery.data?.items ?? []}
-                  logs={logsQuery.data?.items ?? []}
-                  syncStates={overviewQuery.data?.sync.states ?? []}
-                />
+                <section className="overview-grid">
+                  <MetricCard
+                    label="Interactions Today"
+                    value={overviewQuery.data?.overview.totalInteractions ?? 0}
+                  />
+                  <MetricCard
+                    label="Active Employees"
+                    value={overviewQuery.data?.overview.activeEmployees ?? 0}
+                  />
+                  <MetricCard
+                    label="Total Employees"
+                    value={employeeDirectory.length}
+                  />
+                  <MetricCard
+                    label="Latest Sync"
+                    value={formatAdminTime(latestSyncAt ?? null)}
+                  />
+                </section>
+
+                <section className="operations-grid">
+                  <section className="panel operations-panel">
+                    <div className="panel-head">
+                      <div>
+                        <h2>Pilot Rollout</h2>
+                        <p className="muted">
+                          The rollout sequence and adoption standards the team
+                          should hold during launch.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="note-grid">
+                      <article className="note-card">
+                        <div className="sidebar-label">Rollout path</div>
+                        <ul className="sidebar-list compact-list">
+                          {ROLLOUT_STEPS.map((step) => (
+                            <li key={step}>{step}</li>
+                          ))}
+                        </ul>
+                      </article>
+                      <article className="note-card">
+                        <div className="sidebar-label">Adoption priorities</div>
+                        <ul className="sidebar-list compact-list">
+                          {ADOPTION_PRIORITIES.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </article>
+                    </div>
+                  </section>
+
+                  <section className="panel operations-panel">
+                    <div className="panel-head">
+                      <div>
+                        <h2>System Summary</h2>
+                        <p className="muted">
+                          Quick read on the current operating state without the
+                          dashboard chrome.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="ops-summary-list">
+                      <div className="ops-summary-row">
+                        <span>Blue workspace</span>
+                        <strong>03 - AYA x Hamza/ AI</strong>
+                      </div>
+                      <div className="ops-summary-row">
+                        <span>Audit logs loaded</span>
+                        <strong>{logsQuery.data?.items.length ?? 0}</strong>
+                      </div>
+                      <div className="ops-summary-row">
+                        <span>Transcripts loaded</span>
+                        <strong>
+                          {transcriptsQuery.data?.items.length ?? 0}
+                        </strong>
+                      </div>
+                      <div className="ops-summary-row">
+                        <span>Webhook subscriptions</span>
+                        <strong>
+                          {overviewQuery.data?.sync.webhooks.length ?? 0}
+                        </strong>
+                      </div>
+                    </div>
+                  </section>
+                </section>
 
                 <SyncControlCenter
                   states={overviewQuery.data?.sync.states ?? []}
@@ -768,16 +898,22 @@ export function App() {
               <div className="sync-meta-row">
                 <span>Created</span>
                 <span>
-                  {formatAdminTime(logDetailQuery.data?.item.created_at ?? null)}
+                  {formatAdminTime(
+                    logDetailQuery.data?.item.created_at ?? null,
+                  )}
                 </span>
               </div>
               <div className="sync-meta-row">
                 <span>Employee</span>
-                <span>{logDetailQuery.data?.item.display_name ?? "Unknown"}</span>
+                <span>
+                  {logDetailQuery.data?.item.display_name ?? "Unknown"}
+                </span>
               </div>
               <div className="sync-meta-row">
                 <span>Intent</span>
-                <span>{logDetailQuery.data?.item.detected_intent ?? "unmatched"}</span>
+                <span>
+                  {logDetailQuery.data?.item.detected_intent ?? "unmatched"}
+                </span>
               </div>
               <div className="sync-meta-row">
                 <span>Adapter</span>
@@ -791,13 +927,21 @@ export function App() {
             <div className="json-block">
               <strong>Prompt JSON</strong>
               <pre>
-                {JSON.stringify(logDetailQuery.data?.item.request_json ?? null, null, 2)}
+                {JSON.stringify(
+                  logDetailQuery.data?.item.request_json ?? null,
+                  null,
+                  2,
+                )}
               </pre>
             </div>
             <div className="json-block">
               <strong>Response JSON</strong>
               <pre>
-                {JSON.stringify(logDetailQuery.data?.item.response_json ?? null, null, 2)}
+                {JSON.stringify(
+                  logDetailQuery.data?.item.response_json ?? null,
+                  null,
+                  2,
+                )}
               </pre>
             </div>
           </div>
@@ -959,7 +1103,8 @@ function buildEmployeeDirectory(input: {
     })
     .sort((left, right) => {
       const latestDelta =
-        timestampMs(right.latestInteractionAt) - timestampMs(left.latestInteractionAt);
+        timestampMs(right.latestInteractionAt) -
+        timestampMs(left.latestInteractionAt);
       if (latestDelta !== 0) {
         return latestDelta;
       }
@@ -976,7 +1121,10 @@ function matchesTranscriptToEmployee(
   const employeeName = employee.displayName.trim().toLowerCase();
   const employeeEmail = (employee.email ?? "").trim().toLowerCase();
 
-  return transcriptName === employeeName || Boolean(employeeEmail && transcriptEmail === employeeEmail);
+  return (
+    transcriptName === employeeName ||
+    Boolean(employeeEmail && transcriptEmail === employeeEmail)
+  );
 }
 
 function latestTimestamp(left: string | null, right: string | null) {
