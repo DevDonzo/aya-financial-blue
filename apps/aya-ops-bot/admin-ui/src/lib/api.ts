@@ -59,6 +59,99 @@ export type OverviewResponse = {
   };
 };
 
+export type ReportingCapability = {
+  configured: boolean;
+  companyId: string | null;
+  companyName: string | null;
+  companySlug: string | null;
+  subscriptionStatus: string | null;
+  subscriptionActive: boolean | null;
+  subscriptionTrialing: boolean | null;
+  isEnterprise: boolean;
+  supportsDashboards: boolean;
+  supportsReports: boolean;
+  plan: {
+    planId?: string | null;
+    planName?: string | null;
+    status?: string | null;
+    isPaid?: boolean | null;
+    currentPeriodEnd?: string | null;
+    trialEnd?: string | null;
+  } | null;
+};
+
+export type DashboardRow = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: {
+    id: string;
+    email?: string | null;
+    fullName?: string | null;
+  };
+  dashboardUsers?: Array<{
+    id: string;
+    role: string;
+    user: {
+      id: string;
+      email?: string | null;
+      fullName?: string | null;
+    };
+  }> | null;
+};
+
+export type ReportRow = {
+  id: string;
+  title: string;
+  description?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastGeneratedAt?: string | null;
+  createdBy: {
+    id: string;
+    email?: string | null;
+    fullName?: string | null;
+  };
+  reportUsers: Array<{
+    id: string;
+    role: string;
+    user: {
+      id: string;
+      email?: string | null;
+      fullName?: string | null;
+    };
+  }>;
+  dataSources: Array<{
+    id: string;
+    name?: string | null;
+    sourceType: string;
+    projectIds?: string[] | null;
+    order: number;
+  }>;
+};
+
+export type ReportingResponse = {
+  capability: ReportingCapability;
+  dashboards: {
+    items: DashboardRow[];
+    pageInfo: {
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+    };
+  };
+  reports: {
+    items: ReportRow[];
+    totalCount: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+  errors: {
+    dashboards: string | null;
+    reports: string | null;
+  };
+};
+
 export type LogRow = {
   id: string;
   created_at: string;
@@ -159,6 +252,10 @@ export async function logout() {
 
 export async function fetchOverview() {
   return await request<OverviewResponse>("/admin/api/overview");
+}
+
+export async function fetchReporting() {
+  return await request<ReportingResponse>("/admin/api/reporting");
 }
 
 export async function fetchLogs(params?: { employeeId?: string; limit?: number }) {

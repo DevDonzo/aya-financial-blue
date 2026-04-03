@@ -19,7 +19,9 @@ export type IntentName =
   | "activity.list"
   | "summary.employee_day"
   | "summary.team_day"
-  | "summary.no_activity_day";
+  | "summary.no_activity_day"
+  | "reporting.overview"
+  | "reporting.question";
 
 export interface EmployeeIdentity {
   employeeId: string;

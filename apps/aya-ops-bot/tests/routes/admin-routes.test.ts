@@ -77,6 +77,28 @@ describe("admin routes", () => {
       expect(syncResponse.statusCode).toBe(200);
       expect(syncResponse.json()).toMatchObject({ mode: "incremental" });
 
+      const reportingResponse = await app.inject({
+        method: "GET",
+        url: "/admin/api/reporting",
+        headers: {
+          cookie: "aya_session=admin-session-token",
+        },
+      });
+      expect(reportingResponse.statusCode).toBe(200);
+      expect(reportingResponse.json()).toMatchObject({
+        capability: {
+          configured: true,
+          supportsDashboards: true,
+          supportsReports: false,
+        },
+        dashboards: {
+          items: [{ id: "dashboard_1", title: "Ops Dashboard" }],
+        },
+        reports: {
+          items: [],
+        },
+      });
+
       await app.close();
     } finally {
       env.cleanup();
@@ -125,6 +147,54 @@ async function buildTestAdminApp() {
     };
   });
 
+  vi.doMock("../../src/modules/blue/graphql/client.js", async () => {
+    const actual =
+      await vi.importActual<typeof import("../../src/modules/blue/graphql/client.js")>(
+        "../../src/modules/blue/graphql/client.js",
+      );
+    return {
+      ...actual,
+      fetchBlueReportingCapability: vi.fn().mockResolvedValue({
+        configured: true,
+        companyId: "test-company",
+        companyName: "Test Company",
+        companySlug: "test-company",
+        subscriptionStatus: "active",
+        subscriptionActive: true,
+        subscriptionTrialing: false,
+        isEnterprise: false,
+        supportsDashboards: true,
+        supportsReports: false,
+        plan: {
+          planId: "pro",
+          planName: "Pro",
+        },
+      }),
+      fetchBlueDashboards: vi.fn().mockResolvedValue({
+        items: [
+          {
+            id: "dashboard_1",
+            title: "Ops Dashboard",
+            createdAt: "2026-04-01T00:00:00.000Z",
+            updatedAt: "2026-04-01T00:00:00.000Z",
+            createdBy: { id: "user_1", email: "admin@example.com", fullName: "Admin User" },
+            dashboardUsers: [],
+          },
+        ],
+        pageInfo: {
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      }),
+      fetchBlueReports: vi.fn().mockResolvedValue({
+        items: [],
+        totalCount: 0,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      }),
+    };
+  });
+
   const { initializeDatabase } = await import("../../src/db.js");
   const { requestContextPlugin } = await import("../../src/app/plugins/request-context.js");
   const { authPlugin } = await import("../../src/app/plugins/auth.js");
@@ -142,4 +212,3 @@ async function buildTestAdminApp() {
 
   return app;
 }
-

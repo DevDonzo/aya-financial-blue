@@ -103,6 +103,77 @@ export interface BlueWebhook {
   secret?: string | null;
 }
 
+export interface BlueActorSummary {
+  id: string;
+  email?: string | null;
+  fullName?: string | null;
+}
+
+export interface BlueDashboardUser {
+  id: string;
+  role: "VIEWER" | "EDITOR" | string;
+  user: BlueActorSummary;
+}
+
+export interface BlueDashboard {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: BlueActorSummary;
+  dashboardUsers?: BlueDashboardUser[] | null;
+}
+
+export interface BlueReportUser {
+  id: string;
+  role: "VIEWER" | "EDITOR" | string;
+  user: BlueActorSummary;
+}
+
+export interface BlueReportDataSource {
+  id: string;
+  name?: string | null;
+  sourceType: string;
+  projectIds?: string[] | null;
+  order: number;
+}
+
+export interface BlueReport {
+  id: string;
+  title: string;
+  description?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastGeneratedAt?: string | null;
+  projectIds?: string[] | null;
+  createdBy: BlueActorSummary;
+  reportUsers: BlueReportUser[];
+  dataSources: BlueReportDataSource[];
+}
+
+export interface BlueCompanyPlan {
+  planId?: string | null;
+  planName?: string | null;
+  status?: string | null;
+  isPaid?: boolean | null;
+  currentPeriodEnd?: string | null;
+  trialEnd?: string | null;
+}
+
+export interface BlueReportingCapability {
+  configured: boolean;
+  companyId: string | null;
+  companyName: string | null;
+  companySlug: string | null;
+  subscriptionStatus: string | null;
+  subscriptionActive: boolean | null;
+  subscriptionTrialing: boolean | null;
+  isEnterprise: boolean;
+  supportsDashboards: boolean;
+  supportsReports: boolean;
+  plan: BlueCompanyPlan | null;
+}
+
 export interface BluePageInfo {
   hasNextPage: boolean;
   hasPreviousPage: boolean;

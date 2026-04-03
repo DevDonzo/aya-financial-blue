@@ -241,6 +241,7 @@ export async function resolveRecordQuery(query: string) {
     match: {
       id: filtered[0].id,
       title: filtered[0].title,
+      listId: filtered[0].list_id,
       listTitle: filtered[0].list_title,
     },
     candidates: [],

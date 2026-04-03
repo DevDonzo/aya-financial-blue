@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Modal } from "../components/Modal";
 import { EmployeeActivityTable } from "../features/activity/EmployeeActivityTable";
+import { ReportingCenter } from "../features/dashboard/ReportingCenter";
 import { IdentityLinksManager } from "../features/identity/IdentityLinksManager";
 import { SyncControlCenter } from "../features/sync/SyncControlCenter";
 import {
@@ -20,6 +21,7 @@ import {
   fetchLogDetail,
   fetchLogs,
   fetchOverview,
+  fetchReporting,
   fetchTranscripts,
   login,
   logout,
@@ -33,7 +35,7 @@ import {
 } from "../lib/api";
 import { formatAdminTime, timestampMs } from "../lib/time";
 
-type AdminView = "audit" | "employees" | "operations" | "identity";
+type AdminView = "audit" | "employees" | "operations" | "reporting" | "identity";
 
 type DirectoryEmployee = {
   employeeId: string;
@@ -92,6 +94,11 @@ export function App() {
   const employeeActivityQuery = useQuery({
     queryKey: ["employee-activity"],
     queryFn: fetchEmployeeActivity,
+    enabled: isAdmin,
+  });
+  const reportingQuery = useQuery({
+    queryKey: ["reporting"],
+    queryFn: fetchReporting,
     enabled: isAdmin,
   });
   const identityLinksQuery = useQuery({
@@ -207,6 +214,7 @@ export function App() {
         logsQuery.isLoading ||
         transcriptsQuery.isLoading ||
         employeeActivityQuery.isLoading ||
+        reportingQuery.isLoading ||
         identityLinksQuery.isLoading ||
         employeesQuery.isLoading));
 
@@ -421,6 +429,11 @@ export function App() {
                 label="Command Center"
                 active={activeView === "operations"}
                 onClick={() => setActiveView("operations")}
+              />
+              <ViewTab
+                label="Reporting"
+                active={activeView === "reporting"}
+                onClick={() => setActiveView("reporting")}
               />
               <ViewTab
                 label="Identity"
@@ -866,6 +879,20 @@ export function App() {
               </>
             ) : null}
 
+            {activeView === "reporting" ? (
+              <ReportingCenter
+                capability={reportingQuery.data?.capability}
+                dashboards={reportingQuery.data?.dashboards.items ?? []}
+                reports={reportingQuery.data?.reports.items ?? []}
+                errors={
+                  reportingQuery.data?.errors ?? {
+                    dashboards: null,
+                    reports: null,
+                  }
+                }
+              />
+            ) : null}
+
             {activeView === "identity" ? (
               <IdentityLinksManager
                 links={identityLinksQuery.data?.items ?? []}
@@ -1147,6 +1174,7 @@ async function refreshAll(queryClient: QueryClient) {
 async function refreshAdminData(queryClient: QueryClient) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ["overview"] }),
+    queryClient.invalidateQueries({ queryKey: ["reporting"] }),
     queryClient.invalidateQueries({ queryKey: ["logs"] }),
     queryClient.invalidateQueries({ queryKey: ["transcripts"] }),
     queryClient.invalidateQueries({ queryKey: ["employee-activity"] }),

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 
@@ -78,12 +78,139 @@ const server = setupServer(
       });
     }
 
+    if (body.query.includes("query ReportingCapability")) {
+      return HttpResponse.json({
+        data: {
+          company: {
+            id: "test-company",
+            name: "Test Company",
+            slug: "test-company",
+            subscriptionStatus: "active",
+            subscriptionActive: true,
+            subscriptionTrialing: false,
+            isEnterprise: true,
+            subscriptionPlan: {
+              planId: "enterprise",
+              planName: "Enterprise",
+              status: "active",
+              isPaid: true,
+              currentPeriodEnd: "2026-12-31T00:00:00.000Z",
+              trialEnd: null,
+            },
+          },
+        },
+      });
+    }
+
+    if (body.query.includes("query ReportingDashboards")) {
+      return HttpResponse.json({
+        data: {
+          dashboards: {
+            items: [
+              {
+                id: "dashboard_1",
+                title: "Revenue Dashboard",
+                createdAt: "2026-03-25T00:00:00.000Z",
+                updatedAt: "2026-03-26T00:00:00.000Z",
+                createdBy: {
+                  id: "user_1",
+                  email: "owner@example.com",
+                  fullName: "Owner",
+                },
+                dashboardUsers: [],
+              },
+            ],
+            pageInfo: {
+              hasNextPage: false,
+              hasPreviousPage: false,
+              startCursor: null,
+              endCursor: null,
+            },
+          },
+        },
+      });
+    }
+
+    if (body.query.includes("query ReportingReportById")) {
+      const reportId = String(body.variables.id ?? "report_fallback");
+      return HttpResponse.json({
+        data: {
+          report: {
+            id: reportId,
+            title: reportId.endsWith("_1")
+              ? "AYA x Hamza Workspace Overview"
+              : "AYA x Hamza Employee Workload Tracker",
+            description: "Fallback report",
+            createdAt: "2026-03-25T00:00:00.000Z",
+            updatedAt: "2026-03-26T00:00:00.000Z",
+            lastGeneratedAt: "2026-03-27T00:00:00.000Z",
+            projectIds: ["cmn524yr800e101mh7kn44mhf"],
+            createdBy: {
+              id: "user_1",
+              email: "owner@example.com",
+              fullName: "Owner",
+            },
+            reportUsers: [],
+            dataSources: [
+              {
+                id: "source_fallback_1",
+                name: "Leads",
+                sourceType: "TODOS",
+                projectIds: ["cmn524yr800e101mh7kn44mhf"],
+                order: 1,
+              },
+            ],
+          },
+        },
+      });
+    }
+
+    if (body.query.includes("query ReportingReports")) {
+      return HttpResponse.json({
+        data: {
+          reports: {
+            items: [
+              {
+                id: "report_1",
+                title: "Weekly Funnel",
+                description: "Tracks weekly conversion flow",
+                createdAt: "2026-03-25T00:00:00.000Z",
+                updatedAt: "2026-03-26T00:00:00.000Z",
+                lastGeneratedAt: "2026-03-27T00:00:00.000Z",
+                createdBy: {
+                  id: "user_1",
+                  email: "owner@example.com",
+                  fullName: "Owner",
+                },
+                reportUsers: [],
+                dataSources: [
+                  {
+                    id: "source_1",
+                    name: "Leads",
+                    sourceType: "TODOS",
+                    projectIds: ["cmn524yr800e101mh7kn44mhf"],
+                    order: 1,
+                  },
+                ],
+              },
+            ],
+            totalCount: 1,
+            hasNextPage: false,
+            hasPreviousPage: false,
+          },
+        },
+      });
+    }
+
     return HttpResponse.json({ data: {} });
   }),
 );
 
 describe("blue graphql client mutations and workload query", () => {
   beforeAll(() => server.listen());
+  beforeEach(() => {
+    vi.resetModules();
+  });
   afterEach(() => {
     server.resetHandlers();
     requests.length = 0;
@@ -156,5 +283,109 @@ describe("blue graphql client mutations and workload query", () => {
       env.cleanup();
     }
   });
-});
 
+  it("reads reporting capability, dashboards, and reports", async () => {
+    const env = createTestEnvironment();
+    try {
+      const {
+        fetchBlueDashboards,
+        fetchBlueReportingCapability,
+        fetchBlueReports,
+      } = await import("../../../src/modules/blue/graphql/client.js");
+
+      const capability = await fetchBlueReportingCapability("test-company");
+      const dashboards = await fetchBlueDashboards({ companyId: "test-company" });
+      const reports = await fetchBlueReports({ companyId: "test-company" });
+
+      expect(capability.supportsReports).toBe(true);
+      expect(capability.plan?.planName).toBe("Enterprise");
+      expect(dashboards.items[0]?.title).toBe("Revenue Dashboard");
+      expect(reports.items[0]?.title).toBe("Weekly Funnel");
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it("merges fallback report ids when the company report list is empty", async () => {
+    const env = createTestEnvironment({
+      BLUE_REPORT_FALLBACK_IDS: "report_fallback_1,report_fallback_2",
+    });
+
+    server.use(
+      http.post("https://blue.test/graphql", async ({ request }) => {
+        const body = (await request.json()) as {
+          query: string;
+          variables: Record<string, unknown>;
+        };
+        requests.push(body);
+
+        if (body.query.includes("query ReportingReports")) {
+          return HttpResponse.json({
+            data: {
+              reports: {
+                items: [],
+                totalCount: 0,
+                hasNextPage: false,
+                hasPreviousPage: false,
+              },
+            },
+          });
+        }
+
+        if (body.query.includes("query ReportingReportById")) {
+          const reportId = String(body.variables.id ?? "report_fallback_1");
+          return HttpResponse.json({
+            data: {
+              report: {
+                id: reportId,
+                title: reportId.endsWith("_1")
+                  ? "AYA x Hamza Workspace Overview"
+                  : "AYA x Hamza Employee Workload Tracker",
+                description: "Fallback report",
+                createdAt: "2026-03-25T00:00:00.000Z",
+                updatedAt: "2026-03-26T00:00:00.000Z",
+                lastGeneratedAt: "2026-03-27T00:00:00.000Z",
+                projectIds: ["cmn524yr800e101mh7kn44mhf"],
+                createdBy: {
+                  id: "user_1",
+                  email: "owner@example.com",
+                  fullName: "Owner",
+                },
+                reportUsers: [],
+                dataSources: [
+                  {
+                    id: `source_${reportId}`,
+                    name: "Leads",
+                    sourceType: "TODOS",
+                    projectIds: ["cmn524yr800e101mh7kn44mhf"],
+                    order: 1,
+                  },
+                ],
+              },
+            },
+          });
+        }
+
+        return HttpResponse.json({ data: {} });
+      }),
+    );
+
+    try {
+      const { fetchBlueReports } = await import(
+        "../../../src/modules/blue/graphql/client.js"
+      );
+
+      const reports = await fetchBlueReports({ companyId: "test-company", take: 12 });
+
+      expect(reports.items.map((item) => item.title)).toEqual([
+        "AYA x Hamza Workspace Overview",
+        "AYA x Hamza Employee Workload Tracker",
+      ]);
+      expect(
+        requests.filter((request) => request.query.includes("query ReportingReportById")),
+      ).toHaveLength(2);
+    } finally {
+      env.cleanup();
+    }
+  });
+});

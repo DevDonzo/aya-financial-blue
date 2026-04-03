@@ -17,6 +17,7 @@ import { syncWorkspaceEmployees } from "../blue/users-sync.js";
 import { syncWorkspaceIndex } from "../blue/workspace-index.js";
 import { config } from "../config.js";
 import { NotFoundError } from "../app/errors.js";
+import { getReportingOverview } from "../reporting/service.js";
 import {
   adminLogsQuerySchema,
   adminTranscriptsQuerySchema,
@@ -101,6 +102,23 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     async () => ({
       items: await listAdminDashboardEmployeeActivity(100),
     }),
+  );
+
+  app.get(
+    "/admin/api/reporting",
+    { preHandler: [app.requireRoles(["admin"])] },
+    async () => {
+      const overview = await getReportingOverview();
+      return {
+        capability: overview.capability,
+        dashboards: overview.dashboards,
+        reports: overview.reports,
+        errors: {
+          dashboards: null,
+          reports: null,
+        },
+      };
+    },
   );
 
   app.get(

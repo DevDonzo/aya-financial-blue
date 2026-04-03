@@ -3,9 +3,14 @@ import { ExternalServiceError, ValidationError } from "../../../app/errors.js";
 import { logger } from "../../../lib/logger.js";
 import type {
   BlueActivityEvent,
+  BlueDashboard,
   BlueComment,
+  BlueCompanyPlan,
+  BluePageInfo,
+  BlueReportingCapability,
   BlueCustomFieldDefinition,
   BlueRecord,
+  BlueReport,
   BlueTodoList,
   BlueUser,
   BlueWebhook,
@@ -485,6 +490,337 @@ export async function fetchWorkspaceActivity(input: {
   );
 
   return data.activityList.activities;
+}
+
+export async function fetchBlueReportingCapability(
+  companyId = config.BLUE_COMPANY_ID,
+) {
+  if (!companyId) {
+    return {
+      configured: false,
+      companyId: null,
+      companyName: null,
+      companySlug: null,
+      subscriptionStatus: null,
+      subscriptionActive: null,
+      subscriptionTrialing: null,
+      isEnterprise: false,
+      supportsDashboards: false,
+      supportsReports: false,
+      plan: null,
+    } satisfies BlueReportingCapability;
+  }
+
+  const data = await blueGraphqlRequest<{
+    company: {
+      id: string;
+      name: string;
+      slug: string;
+      subscriptionStatus?: string | null;
+      subscriptionActive?: boolean | null;
+      subscriptionTrialing?: boolean | null;
+      isEnterprise?: boolean | null;
+      subscriptionPlan?: BlueCompanyPlan | null;
+    } | null;
+  }>(
+    `
+      query ReportingCapability($companyId: String!) {
+        company(id: $companyId) {
+          id
+          name
+          slug
+          subscriptionStatus
+          subscriptionActive
+          subscriptionTrialing
+          isEnterprise
+          subscriptionPlan {
+            planId
+            planName
+            status
+            isPaid
+            currentPeriodEnd
+            trialEnd
+          }
+        }
+      }
+    `,
+    { companyId },
+  );
+
+  const company = data.company;
+  const plan = company?.subscriptionPlan ?? null;
+  const planLabel = `${plan?.planId ?? ""} ${plan?.planName ?? ""}`.trim();
+  const isEnterprise = Boolean(
+    company?.isEnterprise || /enterprise/i.test(planLabel),
+  );
+
+  return {
+    configured: true,
+    companyId: company?.id ?? companyId,
+    companyName: company?.name ?? null,
+    companySlug: company?.slug ?? null,
+    subscriptionStatus: company?.subscriptionStatus ?? null,
+    subscriptionActive: company?.subscriptionActive ?? null,
+    subscriptionTrialing: company?.subscriptionTrialing ?? null,
+    isEnterprise,
+    supportsDashboards: true,
+    supportsReports: isEnterprise,
+    plan,
+  } satisfies BlueReportingCapability;
+}
+
+export async function fetchBlueDashboards(input?: {
+  companyId?: string;
+  take?: number;
+}) {
+  const companyId = input?.companyId ?? config.BLUE_COMPANY_ID;
+  const take = input?.take ?? 12;
+
+  const data = await blueGraphqlRequest<{
+    dashboards: {
+      items: BlueDashboard[];
+      pageInfo: BluePageInfo;
+    };
+  }>(
+    `
+      query ReportingDashboards($companyId: String!, $take: Int!) {
+        dashboards(
+          filter: { companyId: $companyId }
+          sort: [updatedAt_DESC]
+          skip: 0
+          take: $take
+        ) {
+          items {
+            id
+            title
+            createdAt
+            updatedAt
+            createdBy {
+              id
+              email
+              fullName
+            }
+            dashboardUsers {
+              id
+              role
+              user {
+                id
+                email
+                fullName
+              }
+            }
+          }
+          pageInfo {
+            hasNextPage
+            hasPreviousPage
+            startCursor
+            endCursor
+          }
+        }
+      }
+    `,
+    { companyId, take },
+  );
+
+  return data.dashboards;
+}
+
+export async function fetchBlueReports(input?: {
+  companyId?: string;
+  take?: number;
+}) {
+  const companyId = input?.companyId ?? config.BLUE_COMPANY_ID;
+  const take = input?.take ?? 12;
+  let listedReports: {
+    items: BlueReport[];
+    totalCount: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  } = {
+    items: [],
+    totalCount: 0,
+    hasNextPage: false,
+    hasPreviousPage: false,
+  };
+  let listError: Error | null = null;
+
+  try {
+    const data = await blueGraphqlRequest<{
+      reports: {
+        items: BlueReport[];
+        totalCount: number;
+        hasNextPage: boolean;
+        hasPreviousPage: boolean;
+      };
+    }>(
+      `
+        query ReportingReports($companyId: String!, $take: Int!) {
+          reports(filter: { companyId: $companyId }, skip: 0, take: $take) {
+            items {
+              id
+              title
+              description
+              createdAt
+              updatedAt
+              lastGeneratedAt
+              projectIds
+              createdBy {
+                id
+                email
+                fullName
+              }
+              reportUsers {
+                id
+                role
+                user {
+                  id
+                  email
+                  fullName
+                }
+              }
+              dataSources {
+                id
+                name
+                sourceType
+                projectIds
+                order
+              }
+            }
+            totalCount
+            hasNextPage
+            hasPreviousPage
+          }
+        }
+      `,
+      { companyId, take },
+    );
+
+    listedReports = data.reports;
+  } catch (error) {
+    listError =
+      error instanceof Error ? error : new Error("Failed to load Blue reports");
+  }
+
+  const fallbackItems = await fetchBlueReportsByIds(config.BLUE_REPORT_FALLBACK_IDS);
+  const dedupedItems = dedupeBlueReports(
+    [...listedReports.items, ...fallbackItems].filter((item) =>
+      isBlueReportInWorkspace(item, config.BLUE_WORKSPACE_ID),
+    ),
+  );
+  const mergedItems = dedupedItems.slice(0, take);
+  const mergedTotalCount = Math.max(listedReports.totalCount, dedupedItems.length);
+
+  if (mergedItems.length > 0 || !listError) {
+    return {
+      items: mergedItems,
+      totalCount: mergedTotalCount,
+      hasNextPage: listedReports.hasNextPage || mergedTotalCount > mergedItems.length,
+      hasPreviousPage: listedReports.hasPreviousPage,
+    };
+  }
+
+  throw listError;
+}
+
+export async function fetchBlueReportById(reportId: string) {
+  if (!reportId.trim()) {
+    throw new ValidationError("Report id is required");
+  }
+
+  const data = await blueGraphqlRequest<{
+    report: BlueReport | null;
+  }>(
+    `
+      query ReportingReportById($id: String!) {
+        report(id: $id) {
+          id
+          title
+          description
+          createdAt
+          updatedAt
+          lastGeneratedAt
+          projectIds
+          createdBy {
+            id
+            email
+            fullName
+          }
+          reportUsers {
+            id
+            role
+            user {
+              id
+              email
+              fullName
+            }
+          }
+          dataSources {
+            id
+            name
+            sourceType
+            projectIds
+            order
+          }
+        }
+      }
+    `,
+    { id: reportId.trim() },
+  );
+
+  return data.report;
+}
+
+async function fetchBlueReportsByIds(reportIds: string[]) {
+  if (!reportIds.length) {
+    return [];
+  }
+
+  const results = await Promise.all(
+    reportIds.map(async (reportId) => {
+      try {
+        return await fetchBlueReportById(reportId);
+      } catch (error) {
+        logger.warn(
+          {
+            err: error,
+            reportId,
+          },
+          "blue report fallback lookup failed",
+        );
+        return null;
+      }
+    }),
+  );
+
+  return results.filter((item): item is BlueReport => Boolean(item));
+}
+
+function dedupeBlueReports(items: BlueReport[]) {
+  const seen = new Set<string>();
+  const deduped: BlueReport[] = [];
+
+  for (const item of items) {
+    if (seen.has(item.id)) {
+      continue;
+    }
+    seen.add(item.id);
+    deduped.push(item);
+  }
+
+  return deduped;
+}
+
+function isBlueReportInWorkspace(report: BlueReport, workspaceId: string) {
+  const projectIds =
+    report.projectIds?.length
+      ? report.projectIds
+      : report.dataSources.flatMap((source) => source.projectIds ?? []);
+
+  if (projectIds.length === 0) {
+    return true;
+  }
+
+  return projectIds.includes(workspaceId);
 }
 
 export async function createOrUpdateWebhook(input: {

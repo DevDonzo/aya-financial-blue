@@ -2,6 +2,7 @@ import { PermissionError, ValidationError } from "../app/errors.js";
 import { getBlueRecordDetail } from "../blue/record-detail.js";
 import { resolveEmployeeName } from "../blue/users-sync.js";
 import {
+  getIndexedRecord,
   resolveListQuery,
   resolveRecordQuery,
   searchRecordQuery,
@@ -22,6 +23,7 @@ import {
   resolvePendingRecordChoice,
 } from "../modules/disambiguation/record-choices.js";
 import { resolveActorIdentity } from "../modules/identity/service.js";
+import { answerReportingQuestion, getReportingOverview } from "../reporting/service.js";
 import { detectIntent } from "../router/intents.js";
 import { insertBotAuditLog } from "../store/audit-store.js";
 import { buildEmployeeDaySummary } from "../summary/daily.js";
@@ -99,7 +101,9 @@ function enforceIntentPermissions(
 
   if (
     match.intent === "summary.team_day" ||
-    match.intent === "summary.no_activity_day"
+    match.intent === "summary.no_activity_day" ||
+    match.intent === "reporting.overview" ||
+    match.intent === "reporting.question"
   ) {
     throw new PermissionError();
   }
@@ -603,6 +607,62 @@ export async function handleInboundMessage(
     };
   }
 
+  if (match.intent === "reporting.overview") {
+    const overview = await getReportingOverview();
+
+    await recordAudit({
+      actor,
+      transport,
+      inboundText: payload.message,
+      detectedIntent: match.intent,
+      adapter: "blue-reporting",
+      outcome: "success",
+      responseText: overview.summaryText,
+      requestJson: {
+        payload,
+        match,
+      },
+      responseJson: overview,
+    });
+
+    return {
+      matched: true,
+      intent: match.intent,
+      actor,
+      responseText: overview.summaryText,
+      data: overview,
+    };
+  }
+
+  if (match.intent === "reporting.question") {
+    const question = requireStringParameter(match.parameters, "question");
+    const result = await answerReportingQuestion({ question });
+
+    await recordAudit({
+      actor,
+      transport,
+      inboundText: payload.message,
+      detectedIntent: match.intent,
+      adapter: "blue-reporting",
+      outcome: "success",
+      responseText: result.answerText,
+      requestJson: {
+        payload,
+        match,
+        question,
+      },
+      responseJson: result,
+    });
+
+    return {
+      matched: true,
+      intent: match.intent,
+      actor,
+      responseText: result.answerText,
+      data: result,
+    };
+  }
+
   const resolvedMatch = await resolveBlueMatch(actor, transport, match);
   const execution = await executeBlueIntent(actor, resolvedMatch);
 
@@ -641,6 +701,36 @@ async function executeBlueIntent(
     );
     const recordTitle = String(match.parameters.recordTitle);
     const targetListTitle = String(match.parameters.targetListTitle);
+    const indexedRecord = await getIndexedRecord(recordId);
+
+    if (indexedRecord?.listId === targetListId) {
+      return {
+        commandName: "moveTodo",
+        commandArgs: JSON.stringify({ recordId, targetListId }),
+        outcome: "success",
+        responseText: `${recordTitle} is already in ${targetListTitle}.`,
+        requestJson: {
+          operation: "moveTodo",
+          workspaceId: config.BLUE_WORKSPACE_ID,
+          recordId,
+          targetListId,
+          skipped: "already-in-target-list",
+        },
+        responseJson: {
+          ok: true,
+          skipped: true,
+        },
+        data: {
+          ok: true,
+          skipped: true,
+          recordId,
+          recordTitle,
+          targetListId,
+          targetListTitle,
+        },
+      };
+    }
+
     const result = await moveRecord({
       workspaceId: config.BLUE_WORKSPACE_ID,
       recordId,

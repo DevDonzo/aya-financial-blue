@@ -19,6 +19,23 @@ export function detectIntent(request: IntentRequest): IntentMatch | null {
     message.includes("no activity") ||
     message.includes("did nothing today") ||
     message.includes("inactive today");
+  const reportingInventoryMatch =
+    message.includes("dashboard") ||
+    message.includes("dashboards") ||
+    message.includes("report") ||
+    message.includes("reports") ||
+    message.includes("reporting");
+  const reportingQuestionMatch =
+    reportingInventoryMatch &&
+    (message.includes("how many") ||
+      message.includes("what") ||
+      message.includes("which") ||
+      message.includes("latest") ||
+      message.includes("recent") ||
+      message.includes("enterprise") ||
+      message.includes("plan") ||
+      message.includes("enabled") ||
+      message.includes("available"));
 
   if (
     message === "what did everyone do today" ||
@@ -48,6 +65,33 @@ export function detectIntent(request: IntentRequest): IntentMatch | null {
       intent: "summary.no_activity_day",
       confidence: 0.82,
       parameters: {},
+    };
+  }
+
+  if (
+    message === "show reporting" ||
+    message === "show reporting?" ||
+    message === "show me reporting" ||
+    message === "show me the reporting" ||
+    message === "show reports" ||
+    message === "show me reports" ||
+    message === "show dashboards" ||
+    message === "show me dashboards"
+  ) {
+    return {
+      intent: "reporting.overview",
+      confidence: 0.86,
+      parameters: {},
+    };
+  }
+
+  if (reportingQuestionMatch) {
+    return {
+      intent: "reporting.question",
+      confidence: 0.8,
+      parameters: {
+        question: request.message.trim(),
+      },
     };
   }
 

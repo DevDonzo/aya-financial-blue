@@ -494,6 +494,12 @@ h3 {
     color: var(--info);
 }
 
+.status-chip.neutral {
+    background: var(--bg-panel-2);
+    color: var(--text-soft);
+    border: 1px solid var(--line);
+}
+
 .link-button {
     padding: 0;
     background: transparent;
@@ -513,6 +519,96 @@ h3 {
 
 .operations-panel {
     min-height: 100%;
+}
+
+.reporting-layout {
+    display: grid;
+    gap: 18px;
+}
+
+.reporting-hero,
+.reporting-panel {
+    min-height: 100%;
+}
+
+.reporting-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.reporting-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.reporting-metric {
+    min-height: 100%;
+}
+
+.reporting-callout {
+    margin-top: 16px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    line-height: 1.5;
+}
+
+.reporting-callout-warn {
+    background: rgba(243, 201, 106, 0.08);
+    border-color: rgba(243, 201, 106, 0.2);
+    color: #f3c96a;
+}
+
+.reporting-callout-danger {
+    background: var(--danger-soft);
+    border-color: rgba(255, 107, 107, 0.22);
+    color: #ffc0c0;
+}
+
+.reporting-stack {
+    display: grid;
+    gap: 12px;
+}
+
+.report-card {
+    padding: 16px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: var(--bg-panel-2);
+    display: grid;
+    gap: 10px;
+}
+
+.report-card-head,
+.report-card-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.report-card-copy {
+    line-height: 1.5;
+}
+
+.report-chip-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.report-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(137, 188, 255, 0.1);
+    color: #b6d4ff;
+    font-size: 0.82rem;
 }
 
 .note-grid {
@@ -1250,6 +1346,8 @@ h3 {
     .audit-layout,
     .overview-grid,
     .operations-grid,
+    .reporting-grid,
+    .reporting-metrics,
     .note-grid,
     .command-strip,
     .command-grid,

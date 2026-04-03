@@ -6,6 +6,9 @@ import { z } from "zod";
 
 const appRoot = path.resolve(import.meta.dirname, "..");
 const workspaceRoot = path.resolve(appRoot, "..", "..");
+const defaultBlueWorkspaceId =
+  process.env.BLUE_WORKSPACE_ID ??
+  "cmn524yr800e101mh7kn44mhf";
 
 const blueConfigEnv = readSimpleEnvFile(
   path.join(os.homedir(), ".config", "blue", "config.env"),
@@ -13,10 +16,19 @@ const blueConfigEnv = readSimpleEnvFile(
 const localBlueToken = readLocalBlueToken(
   path.join(workspaceRoot, ".local", "blue-api-token.json"),
 );
+const resolvedBlueWorkspaceId =
+  process.env.BLUE_WORKSPACE_ID ??
+  blueConfigEnv.BLUE_WORKSPACE_ID ??
+  defaultBlueWorkspaceId;
+const defaultDemoReportFallbackIds =
+  resolvedBlueWorkspaceId === "cmn524yr800e101mh7kn44mhf"
+    ? "cmnhsqk54041rmo01sfcq7a2x,cmnhszrso04mpmk01kzu1jof1"
+    : "";
 
 const runtimeEnv = {
   ...blueConfigEnv,
   ...process.env,
+  BLUE_WORKSPACE_ID: resolvedBlueWorkspaceId,
   BLUE_API_URL:
     process.env.BLUE_API_URL ?? process.env.API_URL ?? blueConfigEnv.API_URL,
   BLUE_AUTH_TOKEN:
@@ -33,6 +45,8 @@ const runtimeEnv = {
     process.env.BLUE_COMPANY_ID ??
     process.env.COMPANY_ID ??
     blueConfigEnv.COMPANY_ID,
+  BLUE_REPORT_FALLBACK_IDS:
+    process.env.BLUE_REPORT_FALLBACK_IDS ?? defaultDemoReportFallbackIds,
 };
 
 const configSchema = z.object({
@@ -47,6 +61,15 @@ const configSchema = z.object({
   BLUE_GRAPHQL_MAX_CONCURRENCY: z.coerce.number().default(4),
   BLUE_GRAPHQL_RETRY_ATTEMPTS: z.coerce.number().default(5),
   BLUE_GRAPHQL_RETRY_BASE_MS: z.coerce.number().default(300),
+  BLUE_REPORT_FALLBACK_IDS: z
+    .string()
+    .default(defaultDemoReportFallbackIds)
+    .transform((value) =>
+      value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
   BLUE_WEBHOOK_PUBLIC_URL: z.string().optional(),
   BLUE_WEBHOOK_SECRET: z.string().optional(),
   WORKSPACE_FULL_RECONCILE_HOURS: z.coerce.number().default(6),

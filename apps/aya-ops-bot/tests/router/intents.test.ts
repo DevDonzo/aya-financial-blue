@@ -105,6 +105,33 @@ describe("detectIntent", () => {
     });
   });
 
+  it("matches reporting overview requests", () => {
+    const result = detectIntent({
+      actor,
+      message: "show me dashboards",
+      nowIso: new Date().toISOString(),
+    });
+
+    expect(result).toMatchObject({
+      intent: "reporting.overview",
+    });
+  });
+
+  it("matches reporting questions", () => {
+    const result = detectIntent({
+      actor,
+      message: "how many reports do we have and is enterprise reporting enabled?",
+      nowIso: new Date().toISOString(),
+    });
+
+    expect(result).toMatchObject({
+      intent: "reporting.question",
+      parameters: {
+        question: "how many reports do we have and is enterprise reporting enabled?",
+      },
+    });
+  });
+
   it("returns null for unsupported phrases", () => {
     const result = detectIntent({
       actor,

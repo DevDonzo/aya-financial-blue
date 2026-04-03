@@ -60,28 +60,38 @@ export async function resolveActorIdentity(input: {
   senderId?: string;
   autoLinkByEmail?: boolean;
 }) {
+  let firstLookupError: Error | null = null;
+
   if (input.employeeId) {
     const employee = await findEmployeeById(input.employeeId);
-    if (!employee) {
-      throw new NotFoundError(`Unknown employeeId: ${input.employeeId}`);
+    if (employee) {
+      return toEmployeeIdentity(employee);
     }
-    return toEmployeeIdentity(employee);
+
+    firstLookupError ??= new NotFoundError(`Unknown employeeId: ${input.employeeId}`);
   }
 
   if (input.employeeEmail) {
-    const employee = await resolveEmployeeByEmail(input.employeeEmail, Boolean(input.autoLinkByEmail));
-    if (!employee) {
-      throw new NotFoundError(`Unknown employee email: ${input.employeeEmail}`);
+    const employee = await resolveEmployeeByEmail(
+      input.employeeEmail,
+      Boolean(input.autoLinkByEmail),
+    );
+    if (employee) {
+      return toEmployeeIdentity(employee);
     }
-    return toEmployeeIdentity(employee);
+
+    firstLookupError ??= new NotFoundError(
+      `Unknown employee email: ${input.employeeEmail}`,
+    );
   }
 
   if (input.employeeName) {
     const employee = await findEmployeeByName(input.employeeName);
-    if (!employee) {
-      throw new NotFoundError(`Unknown employee: ${input.employeeName}`);
+    if (employee) {
+      return toEmployeeIdentity(employee);
     }
-    return toEmployeeIdentity(employee);
+
+    firstLookupError ??= new NotFoundError(`Unknown employee: ${input.employeeName}`);
   }
 
   if (input.transport && input.senderId) {
@@ -99,6 +109,10 @@ export async function resolveActorIdentity(input: {
 
   if (config.ALLOW_DEV_DEFAULT_ACTOR && config.NODE_ENV !== "production") {
     return defaultActor;
+  }
+
+  if (firstLookupError) {
+    throw firstLookupError;
   }
 
   throw new AuthError();

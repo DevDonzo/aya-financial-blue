@@ -1,5 +1,6 @@
 import { getBlueRecordDetail } from "../blue/record-detail.js";
 import {
+  getIndexedRecord,
   resolveListQuery,
   resolveRecordQuery,
   searchRecordQuery,
@@ -27,6 +28,7 @@ import {
   buildTeamDaySummary,
 } from "../summary/team.js";
 import { resolveActorIdentity as resolveActorIdentityService } from "../modules/identity/service.js";
+import { answerReportingQuestion, getReportingOverview } from "../reporting/service.js";
 import type { EmployeeIdentity } from "../domain/types.js";
 import { ValidationError } from "../app/errors.js";
 
@@ -232,6 +234,7 @@ export async function getEmployeeWorkload(input: {
   };
 }
 
+
 export async function moveClientToStage(input: {
   recordQuery: string;
   targetListQuery: string;
@@ -247,6 +250,18 @@ export async function moveClientToStage(input: {
     },
   );
   const list = await resolveListOrThrow(input.targetListQuery);
+  const indexedRecord = await getIndexedRecord(record.id);
+
+  if (indexedRecord?.listId === list.id) {
+    return {
+      recordId: record.id,
+      recordTitle: record.title,
+      targetListId: list.id,
+      targetListTitle: list.title,
+      responseText: `${record.title} is already in ${list.title}.`,
+    };
+  }
+
   const result = await moveRecord({
     workspaceId: config.BLUE_WORKSPACE_ID,
     recordId: record.id,
