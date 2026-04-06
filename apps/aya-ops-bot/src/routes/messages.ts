@@ -7,6 +7,7 @@ import {
 import { messageBodySchema } from "../types/api.js";
 import { parseWithSchema } from "../app/plugins/zod.js";
 import { AuthError } from "../app/errors.js";
+import { normalizeBlueRequestAuth } from "../modules/blue/request-auth.js";
 
 export const messageRoutes: FastifyPluginAsync = async (app) => {
   app.post("/intent-test", async (request) => {
@@ -49,6 +50,17 @@ function applyHeadersToPayload(
   actor: { employeeId: string; displayName: string } | null,
   path: string,
 ) {
+  const blueAuth = normalizeBlueRequestAuth({
+    tokenId:
+      payload.actorBlueTokenId ??
+      readHeader(headers, "x-aya-blue-token-id") ??
+      readHeader(headers, "x-blue-token-id"),
+    tokenSecret:
+      payload.actorBlueTokenSecret ??
+      readHeader(headers, "x-aya-blue-token-secret") ??
+      readHeader(headers, "x-blue-token-secret"),
+  });
+
   return {
     ...payload,
     transport: payload.transport ?? (path === "/messages" ? "web" : "http"),
@@ -62,6 +74,8 @@ function applyHeadersToPayload(
       payload.actorEmployeeName ??
       actor?.displayName ??
       readHeader(headers, "x-employee-name"),
+    actorBlueTokenId: blueAuth?.tokenId,
+    actorBlueTokenSecret: blueAuth?.tokenSecret,
     senderId: payload.senderId ?? readHeader(headers, "x-sender-id"),
     senderLabel: payload.senderLabel ?? readHeader(headers, "x-sender-label"),
   } satisfies InboundMessagePayload;

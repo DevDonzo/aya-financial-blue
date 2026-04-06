@@ -10,13 +10,21 @@ import {
 } from "../blue/workspace-index.js";
 import { config } from "../config.js";
 import { createId } from "../db.js";
-import type { EmployeeIdentity, IntentRequest } from "../domain/types.js";
+import type {
+  BlueRequestAuth,
+  EmployeeIdentity,
+  IntentRequest,
+} from "../domain/types.js";
 import {
   createComment,
   createLeadRecord,
   listAssignedOpenRecords,
   moveRecord,
 } from "../modules/blue/graphql/client.js";
+import {
+  normalizeBlueRequestAuth,
+  resolveBlueWriteAuth,
+} from "../modules/blue/request-auth.js";
 import {
   clearPendingRecordChoiceForActor,
   rememberPendingRecordChoice,
@@ -39,6 +47,8 @@ export interface InboundMessagePayload {
   actorEmployeeId?: string;
   actorEmployeeEmail?: string;
   actorEmployeeName?: string;
+  actorBlueTokenId?: string;
+  actorBlueTokenSecret?: string;
   message: string;
 }
 
@@ -73,6 +83,25 @@ function wrapPendingExecution(
     intent,
     adapter: "pending-record-choice",
     ...execution,
+  };
+}
+
+function resolvePayloadBlueAuth(
+  payload: InboundMessagePayload,
+): BlueRequestAuth | null {
+  return normalizeBlueRequestAuth({
+    tokenId: payload.actorBlueTokenId,
+    tokenSecret: payload.actorBlueTokenSecret,
+  });
+}
+
+function redactPayloadForAudit(payload: InboundMessagePayload) {
+  return {
+    ...payload,
+    actorBlueTokenId: payload.actorBlueTokenId ? "[redacted]" : undefined,
+    actorBlueTokenSecret: payload.actorBlueTokenSecret
+      ? "[redacted]"
+      : undefined,
   };
 }
 
@@ -388,6 +417,8 @@ export async function handleInboundMessage(
 ): Promise<MessageResponse> {
   const actor = await resolveActorFromPayload(payload);
   const transport = payload.transport ?? "http";
+  const blueAuth = resolvePayloadBlueAuth(payload);
+  const auditPayload = redactPayloadForAudit(payload);
 
   const intentRequest: IntentRequest = {
     actor,
@@ -401,6 +432,7 @@ export async function handleInboundMessage(
       actor,
       transport,
       payload.message,
+      blueAuth,
     );
     if (pendingFollowUp) {
       await recordAudit({
@@ -436,7 +468,7 @@ export async function handleInboundMessage(
       outcome: "unmatched",
       responseText,
       requestJson: {
-        payload,
+        payload: auditPayload,
       },
       responseJson: {
         matched: false,
@@ -475,7 +507,7 @@ export async function handleInboundMessage(
       outcome: "success",
       responseText: summary.summaryText,
       requestJson: {
-        payload,
+        payload: auditPayload,
         match,
         employeeId: employee.id,
       },
@@ -505,7 +537,7 @@ export async function handleInboundMessage(
       outcome: "success",
       responseText: summary.summaryText,
       requestJson: {
-        payload,
+        payload: auditPayload,
         match,
       },
       responseJson: summary,
@@ -534,7 +566,7 @@ export async function handleInboundMessage(
       outcome: "success",
       responseText: summary.summaryText,
       requestJson: {
-        payload,
+        payload: auditPayload,
         match,
       },
       responseJson: summary,
@@ -571,7 +603,7 @@ export async function handleInboundMessage(
       outcome: "success",
       responseText,
       requestJson: {
-        payload,
+        payload: auditPayload,
         match,
         query,
       },
@@ -619,7 +651,7 @@ export async function handleInboundMessage(
       outcome: "success",
       responseText: overview.summaryText,
       requestJson: {
-        payload,
+        payload: auditPayload,
         match,
       },
       responseJson: overview,
@@ -647,7 +679,7 @@ export async function handleInboundMessage(
       outcome: "success",
       responseText: result.answerText,
       requestJson: {
-        payload,
+        payload: auditPayload,
         match,
         question,
       },
@@ -664,7 +696,7 @@ export async function handleInboundMessage(
   }
 
   const resolvedMatch = await resolveBlueMatch(actor, transport, match);
-  const execution = await executeBlueIntent(actor, resolvedMatch);
+  const execution = await executeBlueIntent(actor, resolvedMatch, blueAuth);
 
   await recordAudit({
     actor,
@@ -692,8 +724,10 @@ export async function handleInboundMessage(
 async function executeBlueIntent(
   actor: EmployeeIdentity,
   match: NonNullable<ReturnType<typeof detectIntent>>,
+  blueAuth?: BlueRequestAuth | null,
 ): Promise<BlueExecutionResult> {
   if (match.intent === "records.move") {
+    const writeAuth = resolveBlueWriteAuth(blueAuth);
     const recordId = requireStringParameter(match.parameters, "recordId");
     const targetListId = requireStringParameter(
       match.parameters,
@@ -735,6 +769,7 @@ async function executeBlueIntent(
       workspaceId: config.BLUE_WORKSPACE_ID,
       recordId,
       targetListId,
+      auth: writeAuth,
     });
 
     await syncWorkspaceIndex();
@@ -746,6 +781,7 @@ async function executeBlueIntent(
       responseText: `Moved ${recordTitle} to ${targetListTitle}.`,
       requestJson: {
         operation: "moveTodo",
+        authMode: writeAuth ? "user" : "system",
         workspaceId: config.BLUE_WORKSPACE_ID,
         recordId,
         targetListId,
@@ -762,6 +798,7 @@ async function executeBlueIntent(
   }
 
   if (match.intent === "records.create") {
+    const writeAuth = resolveBlueWriteAuth(blueAuth);
     const fullName = requireStringParameter(match.parameters, "fullName");
     const targetListId = requireStringParameter(
       match.parameters,
@@ -803,6 +840,7 @@ async function executeBlueIntent(
       email,
       financeAmount,
       notes,
+      auth: writeAuth,
     });
 
     await syncWorkspaceIndex();
@@ -820,6 +858,7 @@ async function executeBlueIntent(
       responseText: `Created ${fullName} in ${targetListTitle}.`,
       requestJson: {
         operation: "createLeadRecord",
+        authMode: writeAuth ? "user" : "system",
         workspaceId: config.BLUE_WORKSPACE_ID,
         listId: targetListId,
         fullName,
@@ -839,6 +878,7 @@ async function executeBlueIntent(
   }
 
   if (match.intent === "comments.create") {
+    const writeAuth = resolveBlueWriteAuth(blueAuth);
     const recordId = requireStringParameter(match.parameters, "recordId");
     const text = requireStringParameter(match.parameters, "text");
     const recordTitle = String(match.parameters.recordTitle);
@@ -846,6 +886,7 @@ async function executeBlueIntent(
       workspaceId: config.BLUE_WORKSPACE_ID,
       recordId,
       text,
+      auth: writeAuth,
     });
 
     return {
@@ -855,6 +896,7 @@ async function executeBlueIntent(
       responseText: `Added comment to ${recordTitle}.`,
       requestJson: {
         operation: "createComment",
+        authMode: writeAuth ? "user" : "system",
         workspaceId: config.BLUE_WORKSPACE_ID,
         recordId,
         text,
@@ -1040,6 +1082,7 @@ async function continuePendingRecordChoice(
   actor: EmployeeIdentity,
   transport: string,
   message: string,
+  blueAuth?: BlueRequestAuth | null,
 ): Promise<PendingFollowUpExecution | null> {
   const pendingSelection = await resolvePendingRecordChoice({
     actor,
@@ -1105,7 +1148,7 @@ async function continuePendingRecordChoice(
     };
     return wrapPendingExecution(
       syntheticMatch.intent,
-      await executeBlueIntent(actor, syntheticMatch),
+      await executeBlueIntent(actor, syntheticMatch, blueAuth),
     );
   }
 
@@ -1125,7 +1168,7 @@ async function continuePendingRecordChoice(
     };
     return wrapPendingExecution(
       syntheticMatch.intent,
-      await executeBlueIntent(actor, syntheticMatch),
+      await executeBlueIntent(actor, syntheticMatch, blueAuth),
     );
   }
 
@@ -1163,7 +1206,7 @@ async function continuePendingRecordChoice(
     };
     return wrapPendingExecution(
       syntheticMatch.intent,
-      await executeBlueIntent(actor, syntheticMatch),
+      await executeBlueIntent(actor, syntheticMatch, blueAuth),
     );
   }
 

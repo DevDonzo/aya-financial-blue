@@ -4,12 +4,7 @@ cache: true
 
 interface:
   customWelcome: |
-    How can Aya help today?
-    Tip: Ask the same way you'd message an operations teammate.
-    - What am I working on today?
-    - Show recent comments for John Smith.
-    - Move Sheraz to underwriting.
-    - Create a new lead for John Smith with phone 4165550123, email john@example.com, and amount 275000.
+    Aya Financial Assistant
   fileSearch: false
   privacyPolicy:
     externalUrl: "https://www.ayafinancial.com/privacy"
@@ -72,24 +67,36 @@ registration:
 actions:
   allowedDomains:
     - "librechat.ai"
-
 mcpSettings:
   allowedDomains:
     - "aya"
     - "localhost"
     - "127.0.0.1"
 
+endpoints:
+  custom:
+    - name: "groq"
+      apiKey: "${GROQ_API_KEY}"
+      baseURL: "https://api.groq.com/openai/v1/"
+      models:
+        default:
+          - "openai/gpt-oss-120b"
+        fetch: false
+      titleConvo: true
+      titleModel: "openai/gpt-oss-120b"
+      modelDisplayLabel: "Groq"
+
 modelSpecs:
   enforce: true
   prioritize: true
   list:
     - name: "aya-ops-assistant"
-      label: "Aya Ops Assistant"
-      description: "Use Aya tools for client search, workflow status, comments, activity, and safe CRM actions in the Blue workspace `03 - AYA x Hamza/ AI`."
+      label: "Aya Financial Assistant"
+      description: "Internal assistant for client files, comments, workload, and management reporting."
       default: true
       preset:
-        endpoint: "openAI"
-        model: "gpt-4.1-mini"
+        endpoint: "groq"
+        model: "openai/gpt-oss-120b"
         instructions: |
           You are Aya Financial's internal operations assistant.
 
@@ -97,6 +104,9 @@ modelSpecs:
           Assume the user is non-technical unless they explicitly ask a technical question.
           Never mention MCP, tools, functions, function names, JSON, schemas, endpoints, APIs, or internal implementation details unless the user explicitly asks.
           When a user asks what you can do, answer in plain business language with relevant examples, not internal capability names.
+          Explain roles in business language:
+          - employees can ask about client files, comments, stages, and new leads
+          - admins can also ask about employee activity, workload, reports, and dashboards
 
           Always prefer the Aya MCP tools when the user asks about:
           - clients, records, comments, stages, assignments, or activity
@@ -141,7 +151,7 @@ modelSpecs:
           - normalize obvious amount shorthand like 275k to 275000 when possible
           - do not invent purchase price, down payment, or other missing financial fields
           - ask a short follow-up if the name split is ambiguous
-      authType: "user_provided"
+      authType: "system_defined"
       mcpServers:
         - "aya_ops"
 
@@ -152,8 +162,17 @@ mcpServers:
     chatMenu: false
     startup: true
     timeout: 90000
+    customUserVars:
+      AYA_BLUE_TOKEN_ID:
+        title: "Blue Token ID"
+        description: "Your personal Blue Token ID from Blue > Profile > API. Used for employee-triggered Blue write actions so Blue attributes the change to you."
+      AYA_BLUE_TOKEN_SECRET:
+        title: "Blue Token Secret"
+        description: "Your personal Blue Token Secret. Stored encrypted by LibreChat and used only for employee-triggered Blue write actions."
     serverInstructions: |
-      Aya Ops tools sit on top of Blue workspace `03 - AYA x Hamza/ AI` only. Use these tools for workflow lookups, summaries, recent comments, and approved CRM actions. Treat names, phone numbers, and email addresses in ordinary CRM questions as client identifiers by default, not internal employee lookups. Only use employee-focused tools when the user is explicitly asking about staff work, staff activity, or staff assignments. Prefer explicit firstName and lastName arguments for lead creation, normalize human names and obvious amount shorthand, and ask a short follow-up instead of guessing when a request is ambiguous.
+      Aya Ops tools back the Aya Financial Assistant. Keep the experience business-facing and internal-only. Use these tools for workflow lookups, summaries, recent comments, approved CRM actions, workload questions, and reporting. Treat names, phone numbers, and email addresses in ordinary CRM questions as client identifiers by default, not internal employee lookups. Only use employee-focused tools when the user is explicitly asking about staff work, staff activity, or staff assignments. Prefer explicit firstName and lastName arguments for lead creation, normalize human names and obvious amount shorthand, and ask a short follow-up instead of guessing when a request is ambiguous.
     headers:
       x-aya-employee-email: "{{LIBRECHAT_USER_EMAIL}}"
       x-aya-employee-name: "{{LIBRECHAT_USER_NAME}}"
+      x-aya-blue-token-id: "{{AYA_BLUE_TOKEN_ID}}"
+      x-aya-blue-token-secret: "{{AYA_BLUE_TOKEN_SECRET}}"

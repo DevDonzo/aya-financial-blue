@@ -29,8 +29,9 @@ import {
 } from "../summary/team.js";
 import { resolveActorIdentity as resolveActorIdentityService } from "../modules/identity/service.js";
 import { answerReportingQuestion, getReportingOverview } from "../reporting/service.js";
-import type { EmployeeIdentity } from "../domain/types.js";
+import type { BlueRequestAuth, EmployeeIdentity } from "../domain/types.js";
 import { ValidationError } from "../app/errors.js";
+import { resolveBlueWriteAuth } from "../modules/blue/request-auth.js";
 
 export async function resolveActorIdentity(input: {
   employeeId?: string;
@@ -55,12 +56,15 @@ export async function runAyaMessageTool(input: {
   actorEmployeeId?: string;
   actorEmployeeEmail?: string;
   actorEmployeeName?: string;
+  blueAuth?: BlueRequestAuth | null;
 }) {
   const payload: InboundMessagePayload = {
     transport: "mcp",
     actorEmployeeId: input.actorEmployeeId,
     actorEmployeeEmail: input.actorEmployeeEmail,
     actorEmployeeName: input.actorEmployeeName,
+    actorBlueTokenId: input.blueAuth?.tokenId,
+    actorBlueTokenSecret: input.blueAuth?.tokenSecret,
     message: input.message,
   };
 
@@ -239,7 +243,9 @@ export async function moveClientToStage(input: {
   recordQuery: string;
   targetListQuery: string;
   actor?: EmployeeIdentity | null;
+  blueAuth?: BlueRequestAuth | null;
 }) {
+  const writeAuth = resolveBlueWriteAuth(input.blueAuth);
   const record = await resolveRecordOrThrow(
     input.recordQuery,
     "recordQuery",
@@ -266,6 +272,7 @@ export async function moveClientToStage(input: {
     workspaceId: config.BLUE_WORKSPACE_ID,
     recordId: record.id,
     targetListId: list.id,
+    auth: writeAuth,
   });
   if (!result.ok) {
     throw new Error("Failed to move client");
@@ -285,7 +292,9 @@ export async function addCommentToClient(input: {
   recordQuery: string;
   text: string;
   actor?: EmployeeIdentity | null;
+  blueAuth?: BlueRequestAuth | null;
 }) {
+  const writeAuth = resolveBlueWriteAuth(input.blueAuth);
   const record = await resolveRecordOrThrow(
     input.recordQuery,
     "recordQuery",
@@ -299,6 +308,7 @@ export async function addCommentToClient(input: {
     workspaceId: config.BLUE_WORKSPACE_ID,
     recordId: record.id,
     text: input.text.trim(),
+    auth: writeAuth,
   });
 
   return {
@@ -319,7 +329,10 @@ export async function createClientRecord(input: {
   financeAmount?: number;
   notes?: string;
   targetListQuery?: string;
+  actor?: EmployeeIdentity | null;
+  blueAuth?: BlueRequestAuth | null;
 }) {
+  const writeAuth = resolveBlueWriteAuth(input.blueAuth);
   const list = await resolveListOrThrow(input.targetListQuery || "🧰 0 - Leads/Tasks");
   const record = await createLeadRecord({
     workspaceId: config.BLUE_WORKSPACE_ID,
@@ -331,6 +344,7 @@ export async function createClientRecord(input: {
     email: input.email?.trim(),
     financeAmount: input.financeAmount,
     notes: input.notes?.trim(),
+    auth: writeAuth,
   });
   await syncWorkspaceIndex();
 

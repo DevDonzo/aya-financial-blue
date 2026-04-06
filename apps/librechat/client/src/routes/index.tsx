@@ -58,6 +58,10 @@ export const router = createBrowserRouter(
       errorElement: <RouteErrorBoundary />,
       children: [
         {
+          path: 'signup',
+          element: <Navigate to="/register" replace={true} />,
+        },
+        {
           path: 'register',
           element: <Registration />,
         },

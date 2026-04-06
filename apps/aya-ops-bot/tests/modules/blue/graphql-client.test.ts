@@ -4,14 +4,31 @@ import { setupServer } from "msw/node";
 
 import { createTestEnvironment } from "../../helpers/test-env.js";
 
-const requests: Array<{ query: string; variables: Record<string, unknown> }> = [];
+const requests: Array<{
+  query: string;
+  variables: Record<string, unknown>;
+  headers: {
+    tokenId: string | null;
+    tokenSecret: string | null;
+    companyId: string | null;
+    projectId: string | null;
+  };
+}> = [];
 const server = setupServer(
   http.post("https://blue.test/graphql", async ({ request }) => {
     const body = (await request.json()) as {
       query: string;
       variables: Record<string, unknown>;
     };
-    requests.push(body);
+    requests.push({
+      ...body,
+      headers: {
+        tokenId: request.headers.get("x-bloo-token-id"),
+        tokenSecret: request.headers.get("x-bloo-token-secret"),
+        companyId: request.headers.get("x-bloo-company-id"),
+        projectId: request.headers.get("x-bloo-project-id"),
+      },
+    });
 
     if (body.query.includes("mutation MoveTodo")) {
       return HttpResponse.json({ data: { moveTodo: true } });
@@ -233,6 +250,37 @@ describe("blue graphql client mutations and workload query", () => {
           todoId: "todo_123",
           todoListId: "list_456",
         },
+      });
+      expect(requests[0]?.headers).toEqual({
+        tokenId: "test-client",
+        tokenSecret: "test-secret",
+        companyId: "test-company",
+        projectId: "cmn524yr800e101mh7kn44mhf",
+      });
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it("uses request-scoped Blue credentials when provided", async () => {
+    const env = createTestEnvironment();
+    try {
+      const { moveRecord } = await import("../../../src/modules/blue/graphql/client.js");
+      await moveRecord({
+        workspaceId: "cmn524yr800e101mh7kn44mhf",
+        recordId: "todo_123",
+        targetListId: "list_456",
+        auth: {
+          tokenId: "user-token-id",
+          tokenSecret: "user-token-secret",
+        },
+      });
+
+      expect(requests[0]?.headers).toEqual({
+        tokenId: "user-token-id",
+        tokenSecret: "user-token-secret",
+        companyId: "test-company",
+        projectId: "cmn524yr800e101mh7kn44mhf",
       });
     } finally {
       env.cleanup();

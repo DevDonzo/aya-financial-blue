@@ -48,11 +48,17 @@ function MCPSelectContent() {
     return localize('com_ui_x_selected', { 0: selectedCount });
   }, [selectedCount, selectableServers, mcpValues, localize]);
 
-  if (!isPinned && mcpValues?.length === 0) {
-    return null;
-  }
-
   const configDialogProps = getConfigDialogProps();
+
+  if (!isPinned && mcpValues?.length === 0) {
+    return configDialogProps ? (
+      <MCPConfigDialog
+        {...configDialogProps}
+        conversationId={conversationId}
+        storageContextKey={storageContextKey}
+      />
+    ) : null;
+  }
 
   return (
     <>
@@ -127,13 +133,13 @@ function MCPSelectContent() {
 
 function MCPSelect() {
   const { mcpServerManager } = useBadgeRowContext();
-  const { selectableServers } = mcpServerManager;
+  const { availableMCPServers } = mcpServerManager;
   const canUseMcp = useHasAccess({
     permissionType: PermissionTypes.MCP_SERVERS,
     permission: Permissions.USE,
   });
 
-  if (!canUseMcp || !selectableServers || selectableServers.length === 0) {
+  if (!canUseMcp || !availableMCPServers || availableMCPServers.length === 0) {
     return null;
   }
 

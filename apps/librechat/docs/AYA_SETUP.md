@@ -24,6 +24,9 @@ LibreChat's model layer should extract structure from that language and call Aya
 - LibreChat passes the signed-in user's identity to Aya via:
   - `x-aya-employee-email: {{LIBRECHAT_USER_EMAIL}}`
   - `x-aya-employee-name: {{LIBRECHAT_USER_NAME}}`
+- LibreChat can also store each employee's Blue personal token as encrypted Aya MCP custom user vars and pass them to Aya only for employee-triggered write actions:
+  - `x-aya-blue-token-id: {{AYA_BLUE_TOKEN_ID}}`
+  - `x-aya-blue-token-secret: {{AYA_BLUE_TOKEN_SECRET}}`
 
 ## Why This Works
 
@@ -42,6 +45,11 @@ Aya keeps:
 - Blue-safe CRM actions
 - employee and manager summaries
 - client search and detail logic
+
+Blue attribution model:
+
+- Aya keeps one system Blue token for background sync, health checks, and webhook management.
+- Employee-triggered writes should use each employee's personal Blue token so Blue attributes moves/comments/creates to the real employee instead of the shared integration account.
 
 ## Important Constraint
 
@@ -102,6 +110,7 @@ Use these files when moving from local setup to a hardened internal deployment:
 2. Host Aya on the same server or private network
 3. Point LibreChat MCP to Aya over internal HTTP/HTTPS
 4. Move from email login to company SSO later with OpenID
+5. Ask each employee to open the Aya MCP server settings once and save their Blue Token ID and Secret
 
 ## Pilot Rollout Guidance
 

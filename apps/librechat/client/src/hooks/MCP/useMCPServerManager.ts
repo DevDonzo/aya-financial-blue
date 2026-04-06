@@ -19,7 +19,7 @@ import {
 import type { TUpdateUserPlugins, TPlugin, MCPServersResponse } from 'librechat-data-provider';
 import type { ConfigFieldDetail } from '~/common';
 import { useLocalize, useHasAccess, useMCPSelect, useMCPConnectionStatus } from '~/hooks';
-import { useGetStartupConfig, useMCPServersQuery } from '~/data-provider';
+import { useGetStartupConfig, useMCPServersQuery, useMCPToolsQuery } from '~/data-provider';
 import { mcpServerInitStatesAtom, getServerInitState } from '~/store/mcp';
 import type { MCPServerInitState } from '~/store/mcp';
 
@@ -50,6 +50,9 @@ export function useMCPServerManager({
   });
 
   const { data: loadedServers, isLoading } = useMCPServersQuery({ enabled: canUseMcp });
+  const { data: mcpToolsData } = useMCPToolsQuery({
+    enabled: canUseMcp && !isLoading && !!loadedServers && Object.keys(loadedServers).length > 0,
+  });
 
   // Fetch effective permissions for all MCP servers
   const { data: permissionsMap } = useGetAllEffectivePermissionsQuery(ResourceType.MCPSERVER, {
@@ -59,6 +62,7 @@ export function useMCPServerManager({
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [selectedToolForConfig, setSelectedToolForConfig] = useState<TPlugin | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const hasAutoPromptedRef = useRef(false);
 
   const availableMCPServers: MCPServerDefinition[] = useMemo<MCPServerDefinition[]>(() => {
     const definitions: MCPServerDefinition[] = [];
@@ -536,6 +540,62 @@ export function useMCPServerManager({
     }
   }, []);
 
+  const openConfigDialogForServer = useCallback(
+    (serverName: string) => {
+      const serverData = mcpToolsData?.servers?.[serverName];
+      const serverConfig = loadedServers?.[serverName];
+      if (!serverConfig) {
+        return;
+      }
+
+      const configTool: TPlugin = {
+        name: serverName,
+        pluginKey: `${Constants.mcp_prefix}${serverName}`,
+        authConfig:
+          serverData?.authConfig ||
+          (serverConfig.customUserVars
+            ? Object.entries(serverConfig.customUserVars).map(([key, config]) => ({
+                authField: key,
+                label: config.title,
+                description: config.description,
+              }))
+            : []),
+        authenticated: serverData?.authenticated ?? false,
+      };
+
+      setSelectedToolForConfig(configTool);
+      setIsConfigModalOpen(true);
+    },
+    [loadedServers, queryClient],
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || isConfigModalOpen || hasAutoPromptedRef.current) {
+      return;
+    }
+
+    if (!loadedServers || !mcpToolsData?.servers) {
+      return;
+    }
+
+    const preferredTargets = ['aya_ops', ...Object.keys(mcpToolsData.servers)];
+    const targetServerName = preferredTargets.find((serverName) => {
+      const serverData = mcpToolsData.servers?.[serverName];
+      const serverConfig = loadedServers?.[serverName];
+      const hasCustomUserVars =
+        !!serverConfig?.customUserVars && Object.keys(serverConfig.customUserVars).length > 0;
+
+      return hasCustomUserVars && serverData?.authenticated === false;
+    });
+
+    if (!targetServerName) {
+      return;
+    }
+
+    hasAutoPromptedRef.current = true;
+    openConfigDialogForServer(targetServerName);
+  }, [isConfigModalOpen, loadedServers, mcpToolsData, openConfigDialogForServer]);
+
   const getServerStatusIconProps = useCallback(
     (serverName: string) => {
       const mcpData = queryClient.getQueryData<MCPServersResponse | undefined>([
@@ -551,23 +611,7 @@ export function useMCPServerManager({
 
         previousFocusRef.current = document.activeElement as HTMLElement;
 
-        /** Minimal TPlugin object for the config dialog */
-        const configTool: TPlugin = {
-          name: serverName,
-          pluginKey: `${Constants.mcp_prefix}${serverName}`,
-          authConfig:
-            serverData?.authConfig ||
-            (serverConfig?.customUserVars
-              ? Object.entries(serverConfig.customUserVars).map(([key, config]) => ({
-                  authField: key,
-                  label: config.title,
-                  description: config.description,
-                }))
-              : []),
-          authenticated: serverData?.authenticated ?? false,
-        };
-        setSelectedToolForConfig(configTool);
-        setIsConfigModalOpen(true);
+        openConfigDialogForServer(serverName);
       };
 
       const handleCancelClick = (e: React.MouseEvent) => {
@@ -597,7 +641,15 @@ export function useMCPServerManager({
         hasCustomUserVars,
       };
     },
-    [queryClient, isCancellable, isInitializing, cancelOAuthFlow, connectionStatus, loadedServers],
+    [
+      queryClient,
+      isCancellable,
+      isInitializing,
+      cancelOAuthFlow,
+      connectionStatus,
+      loadedServers,
+      openConfigDialogForServer,
+    ],
   );
 
   const getConfigDialogProps = useCallback(() => {

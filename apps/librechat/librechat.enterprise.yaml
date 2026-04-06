@@ -58,12 +58,6 @@ interface:
     create: false
     share: false
     public: false
-    trustCheckbox:
-      label:
-        en: 'I understand and want to continue'
-      subLabel:
-        en: |
-          Aya-approved MCP servers can access internal operational tools. Only use trusted Aya-managed servers and do not enter credentials unless the server is company-approved.
 
 registration:
   socialLogins:
@@ -141,8 +135,17 @@ mcpServers:
     chatMenu: false
     startup: true
     timeout: 90000
+    customUserVars:
+      AYA_BLUE_TOKEN_ID:
+        title: 'Blue Token ID'
+        description: 'Your personal Blue Token ID from Blue > Profile > API. Used for employee-triggered Blue write actions so Blue attributes the change to you.'
+      AYA_BLUE_TOKEN_SECRET:
+        title: 'Blue Token Secret'
+        description: 'Your personal Blue Token Secret. Stored encrypted by LibreChat and used only for employee-triggered Blue write actions.'
     serverInstructions: |
       Aya Ops tools are the approved path for internal workflow lookups and CRM actions. Prefer Aya tools over unsupported free-form answers about internal data. Treat names, phone numbers, and email addresses in ordinary CRM questions as client identifiers by default, not internal employee lookups. Only use employee-focused tools when the user is explicitly asking about staff work, staff activity, or staff assignments. For new lead creation, prefer explicit firstName and lastName arguments, normalize human names even if the user typed lowercase, normalize obvious amount shorthand, and ask a short follow-up instead of guessing when the split is ambiguous.
     headers:
       x-aya-employee-email: '{{LIBRECHAT_USER_EMAIL}}'
       x-aya-employee-name: '{{LIBRECHAT_USER_NAME}}'
+      x-aya-blue-token-id: '{{AYA_BLUE_TOKEN_ID}}'
+      x-aya-blue-token-secret: '{{AYA_BLUE_TOKEN_SECRET}}'

@@ -21,6 +21,8 @@ import {
   answerReportingQuestion,
   getReportingOverview,
 } from "../reporting/service.js";
+import type { BlueRequestAuth } from "../domain/types.js";
+import { normalizeBlueRequestAuth } from "../modules/blue/request-auth.js";
 
 export async function handleAyaMcpRequest(
   request: IncomingMessage,
@@ -60,6 +62,19 @@ async function getHeaderActor(
     employeeId: employeeId || undefined,
     employeeEmail: employeeEmail || undefined,
     employeeName: employeeName || undefined,
+  });
+}
+
+function getHeaderBlueAuth(
+  headers: Record<string, string | string[] | undefined> | undefined,
+): BlueRequestAuth | null {
+  return normalizeBlueRequestAuth({
+    tokenId:
+      getHeaderValue(headers, "x-aya-blue-token-id") ??
+      getHeaderValue(headers, "x-blue-token-id"),
+    tokenSecret:
+      getHeaderValue(headers, "x-aya-blue-token-secret") ??
+      getHeaderValue(headers, "x-blue-token-secret"),
   });
 }
 
@@ -140,11 +155,13 @@ function createAyaMcpServer() {
     },
     async ({ message }, extra) => {
       const actor = await getHeaderActor(extra.requestInfo?.headers);
+      const blueAuth = getHeaderBlueAuth(extra.requestInfo?.headers);
       const result = await runAyaMessageTool({
         message,
         actorEmployeeId: actor?.employeeId,
         actorEmployeeEmail: actor?.email,
         actorEmployeeName: actor?.displayName,
+        blueAuth,
       });
 
       return {
@@ -401,7 +418,8 @@ function createAyaMcpServer() {
       },
       extra,
     ) => {
-      await requireToolActor(extra.requestInfo?.headers);
+      const actor = await requireToolActor(extra.requestInfo?.headers);
+      const blueAuth = getHeaderBlueAuth(extra.requestInfo?.headers);
       const result = await createClientRecord({
         firstName,
         lastName,
@@ -411,6 +429,8 @@ function createAyaMcpServer() {
         financeAmount,
         notes,
         targetListQuery,
+        actor,
+        blueAuth,
       });
       return {
         content: [{ type: "text", text: result.responseText }],
@@ -432,10 +452,12 @@ function createAyaMcpServer() {
     },
     async ({ recordQuery, targetListQuery }, extra) => {
       const actor = await requireToolActor(extra.requestInfo?.headers);
+      const blueAuth = getHeaderBlueAuth(extra.requestInfo?.headers);
       const result = await moveClientToStage({
         recordQuery,
         targetListQuery,
         actor,
+        blueAuth,
       });
       return {
         content: [{ type: "text", text: result.responseText }],
@@ -457,7 +479,13 @@ function createAyaMcpServer() {
     },
     async ({ recordQuery, text }, extra) => {
       const actor = await requireToolActor(extra.requestInfo?.headers);
-      const result = await addCommentToClient({ recordQuery, text, actor });
+      const blueAuth = getHeaderBlueAuth(extra.requestInfo?.headers);
+      const result = await addCommentToClient({
+        recordQuery,
+        text,
+        actor,
+        blueAuth,
+      });
       return {
         content: [{ type: "text", text: result.responseText }],
         structuredContent: toStructuredContent(result),

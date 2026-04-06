@@ -31,6 +31,11 @@ export interface EmployeeIdentity {
   email?: string;
 }
 
+export interface BlueRequestAuth {
+  tokenId: string;
+  tokenSecret: string;
+}
+
 export interface IntentRequest {
   actor: EmployeeIdentity;
   message: string;

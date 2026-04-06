@@ -9,6 +9,7 @@ const workspaceRoot = path.resolve(appRoot, "..", "..");
 const defaultBlueWorkspaceId =
   process.env.BLUE_WORKSPACE_ID ??
   "cmn524yr800e101mh7kn44mhf";
+const detectedNodeEnv = process.env.NODE_ENV ?? "development";
 
 const blueConfigEnv = readSimpleEnvFile(
   path.join(os.homedir(), ".config", "blue", "config.env"),
@@ -45,6 +46,10 @@ const runtimeEnv = {
     process.env.BLUE_COMPANY_ID ??
     process.env.COMPANY_ID ??
     blueConfigEnv.COMPANY_ID,
+  ALLOW_SYSTEM_BLUE_WRITE_FALLBACK:
+    process.env.ALLOW_SYSTEM_BLUE_WRITE_FALLBACK ??
+    blueConfigEnv.ALLOW_SYSTEM_BLUE_WRITE_FALLBACK ??
+    (detectedNodeEnv === "production" ? "false" : "true"),
   BLUE_REPORT_FALLBACK_IDS:
     process.env.BLUE_REPORT_FALLBACK_IDS ?? defaultDemoReportFallbackIds,
 };
@@ -55,6 +60,10 @@ const configSchema = z.object({
   BLUE_AUTH_TOKEN: z.string().default(""),
   BLUE_CLIENT_ID: z.string().default(""),
   BLUE_COMPANY_ID: z.string().default(""),
+  ALLOW_SYSTEM_BLUE_WRITE_FALLBACK: z
+    .string()
+    .default(detectedNodeEnv === "production" ? "false" : "true")
+    .transform((value) => value.toLowerCase() === "true"),
   BLUE_INGEST_INTERVAL_MS: z.coerce.number().default(60_000),
   BLUE_RECORD_SYNC_LIMIT_PER_LIST: z.coerce.number().default(500),
   BLUE_GRAPHQL_PAGE_SIZE: z.coerce.number().default(200),

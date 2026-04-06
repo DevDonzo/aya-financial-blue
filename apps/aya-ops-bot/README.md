@@ -393,7 +393,7 @@ The current rollout posture is suitable for an internal pilot, not a public SaaS
 
 The recommended first production deployment is:
 
-- one Hetzner VM
+- one Hostinger VPS
 - Docker Compose
 - LibreChat
 - Aya Ops Bot
@@ -428,7 +428,7 @@ The pilot is intentionally lean.
 
 Target cost profile:
 
-- Hetzner VM: low-cost 4 vCPU / 8 GB class instance
+- Hostinger VPS: KVM 2 class instance
 - Cloudflare Zero Trust: free tier is sufficient for a small internal pilot
 - LLM costs: modest internal usage should remain manageable if model routing is disciplined
 

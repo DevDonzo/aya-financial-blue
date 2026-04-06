@@ -16,6 +16,7 @@ import type {
   BlueWebhook,
   BlueWebhookEventType,
 } from "../../../types/blue.js";
+import type { BlueRequestAuth } from "../../../domain/types.js";
 
 type GraphqlResponse<T> = {
   data?: T;
@@ -55,9 +56,10 @@ export async function blueGraphqlRequest<T>(
   variables?: Record<string, unknown>,
   options?: {
     projectId?: string;
+    auth?: BlueRequestAuth | null;
   },
 ): Promise<T> {
-  ensureGraphqlConfig();
+  const credentials = resolveGraphqlCredentials(options?.auth);
 
   return await requestQueue.run(async () => {
     let lastError: Error | null = null;
@@ -69,9 +71,9 @@ export async function blueGraphqlRequest<T>(
           method: "POST",
           headers: {
             "content-type": "application/json",
-            "x-bloo-token-id": config.BLUE_CLIENT_ID,
-            "x-bloo-token-secret": config.BLUE_AUTH_TOKEN,
-            "x-bloo-company-id": config.BLUE_COMPANY_ID,
+            "x-bloo-token-id": credentials.clientId,
+            "x-bloo-token-secret": credentials.authToken,
+            "x-bloo-company-id": credentials.companyId,
             ...(options?.projectId
               ? { "x-bloo-project-id": options.projectId }
               : {}),
@@ -944,6 +946,7 @@ export async function createRecord(input: {
   title: string;
   description?: string;
   assigneeIds?: string[];
+  auth?: BlueRequestAuth | null;
 }) {
   const data = await blueGraphqlRequest<{
     createTodo: BlueRecord;
@@ -1002,7 +1005,7 @@ export async function createRecord(input: {
         assigneeIds: input.assigneeIds?.length ? input.assigneeIds : undefined,
       },
     },
-    { projectId: input.workspaceId },
+    { projectId: input.workspaceId, auth: input.auth },
   );
 
   return data.createTodo;
@@ -1015,6 +1018,7 @@ export async function setTodoCustomField(input: {
   text?: string;
   number?: number;
   regionCode?: string;
+  auth?: BlueRequestAuth | null;
 }) {
   const data = await blueGraphqlRequest<{
     setTodoCustomField: boolean;
@@ -1033,7 +1037,7 @@ export async function setTodoCustomField(input: {
         regionCode: input.regionCode,
       },
     },
-    { projectId: input.workspaceId },
+    { projectId: input.workspaceId, auth: input.auth },
   );
 
   return data.setTodoCustomField;
@@ -1050,6 +1054,7 @@ export async function createLeadRecord(input: {
   financeAmount?: number;
   notes?: string;
   assigneeIds?: string[];
+  auth?: BlueRequestAuth | null;
 }) {
   const { fullName, firstName, lastName } = resolveLeadName(input);
   const description = [
@@ -1069,6 +1074,7 @@ export async function createLeadRecord(input: {
     title: fullName,
     description,
     assigneeIds: input.assigneeIds,
+    auth: input.auth,
   });
 
   const customFields = await fetchWorkspaceCustomFields(input.workspaceId);
@@ -1081,24 +1087,28 @@ export async function createLeadRecord(input: {
     todoId: record.id,
     field: fieldByName.get("contact name"),
     text: fullName,
+    auth: input.auth,
   });
   await setOptionalCustomField({
     workspaceId: input.workspaceId,
     todoId: record.id,
     field: fieldByName.get("first name"),
     text: firstName,
+    auth: input.auth,
   });
   await setOptionalCustomField({
     workspaceId: input.workspaceId,
     todoId: record.id,
     field: fieldByName.get("last name"),
     text: lastName,
+    auth: input.auth,
   });
   await setOptionalCustomField({
     workspaceId: input.workspaceId,
     todoId: record.id,
     field: fieldByName.get("email"),
     text: input.email?.trim().toLowerCase(),
+    auth: input.auth,
   });
   await setOptionalCustomField({
     workspaceId: input.workspaceId,
@@ -1106,12 +1116,14 @@ export async function createLeadRecord(input: {
     field: fieldByName.get("phone"),
     text: input.phone?.trim(),
     regionCode: "CA",
+    auth: input.auth,
   });
   await setOptionalCustomField({
     workspaceId: input.workspaceId,
     todoId: record.id,
     field: fieldByName.get("finance amount 1"),
     number: input.financeAmount,
+    auth: input.auth,
   });
 
   return record;
@@ -1199,6 +1211,7 @@ export async function moveRecord(input: {
   workspaceId: string;
   recordId: string;
   targetListId: string;
+  auth?: BlueRequestAuth | null;
 }) {
   const data = await blueGraphqlRequest<{
     moveTodo: boolean;
@@ -1214,7 +1227,7 @@ export async function moveRecord(input: {
         todoListId: input.targetListId,
       },
     },
-    { projectId: input.workspaceId },
+    { projectId: input.workspaceId, auth: input.auth },
   );
 
   return {
@@ -1226,6 +1239,7 @@ export async function createComment(input: {
   workspaceId: string;
   recordId: string;
   text: string;
+  auth?: BlueRequestAuth | null;
 }) {
   const text = input.text.trim();
   const html = `<p>${escapeHtml(text)}</p>`;
@@ -1264,7 +1278,7 @@ export async function createComment(input: {
         tiptap: false,
       },
     },
-    { projectId: input.workspaceId },
+    { projectId: input.workspaceId, auth: input.auth },
   );
 
   return data.createComment;
@@ -1401,12 +1415,27 @@ export async function checkBlueApiConnectivity(workspaceId: string) {
   };
 }
 
-function ensureGraphqlConfig() {
-  if (!config.BLUE_AUTH_TOKEN || !config.BLUE_CLIENT_ID || !config.BLUE_COMPANY_ID) {
+function resolveGraphqlCredentials(auth?: BlueRequestAuth | null) {
+  if (!config.BLUE_COMPANY_ID) {
     throw new ExternalServiceError(
-      "Blue GraphQL credentials are missing. Set BLUE_AUTH_TOKEN, BLUE_CLIENT_ID, and BLUE_COMPANY_ID.",
+      "Blue GraphQL company configuration is missing. Set BLUE_COMPANY_ID.",
     );
   }
+
+  const clientId = auth?.tokenId?.trim() || config.BLUE_CLIENT_ID;
+  const authToken = auth?.tokenSecret?.trim() || config.BLUE_AUTH_TOKEN;
+
+  if (!clientId || !authToken) {
+    throw new ExternalServiceError(
+      "Blue GraphQL credentials are missing. Set BLUE_AUTH_TOKEN and BLUE_CLIENT_ID or provide request-scoped Blue credentials.",
+    );
+  }
+
+  return {
+    clientId,
+    authToken,
+    companyId: config.BLUE_COMPANY_ID,
+  };
 }
 
 function isRetryableGraphqlError(code: string, message: string) {
@@ -1458,6 +1487,7 @@ async function setOptionalCustomField(input: {
   text?: string;
   number?: number;
   regionCode?: string;
+  auth?: BlueRequestAuth | null;
 }) {
   if (!input.field) {
     return;
@@ -1474,5 +1504,6 @@ async function setOptionalCustomField(input: {
     text: input.text?.trim(),
     number: input.number,
     regionCode: input.regionCode,
+    auth: input.auth,
   });
 }

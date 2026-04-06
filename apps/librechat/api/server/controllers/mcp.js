@@ -15,6 +15,7 @@ const {
 } = require('@librechat/api');
 const { Constants, MCPServerUserInputSchema } = require('librechat-data-provider');
 const { cacheMCPServerTools, getMCPServerTools } = require('~/server/services/Config');
+const { getUserPluginAuthValue } = require('~/server/services/PluginService');
 const { getMCPManager, getMCPServersRegistry } = require('~/config');
 
 /**
@@ -137,7 +138,24 @@ const getMCPTools = async (req, res) => {
               label: value.title || key,
               description: value.description || '',
             }));
-            server.authenticated = false;
+
+            const pluginKey = `${Constants.mcp_prefix}${serverName}`;
+            const authFlags = await Promise.all(
+              customVarKeys.map(async (varName) => {
+                try {
+                  const value = await getUserPluginAuthValue(userId, varName, false, pluginKey);
+                  return !!(value && value.length > 0);
+                } catch (error) {
+                  logger.error(
+                    `[getMCPTools] Error checking custom user var ${varName} for server ${serverName}:`,
+                    error,
+                  );
+                  return false;
+                }
+              }),
+            );
+
+            server.authenticated = authFlags.every(Boolean);
           }
         }
 

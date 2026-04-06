@@ -129,6 +129,8 @@ export default function CustomUserVarsSection({
     reset,
     control,
     handleSubmit,
+    setError,
+    clearErrors,
     formState: { errors },
   } = useForm<Record<string, string>>({
     defaultValues: useMemo(() => {
@@ -141,6 +143,26 @@ export default function CustomUserVarsSection({
   });
 
   const onFormSubmit = (data: Record<string, string>) => {
+    clearErrors();
+
+    let hasValidationError = false;
+    for (const [key, config] of Object.entries(fields)) {
+      const hasExistingValue = authValuesData?.authValueFlags?.[key] || false;
+      const trimmedValue = data[key]?.trim() || '';
+
+      if (!hasExistingValue && trimmedValue.length === 0) {
+        setError(key, {
+          type: 'required',
+          message: localize('com_ui_mcp_enter_var', { 0: config.title }),
+        });
+        hasValidationError = true;
+      }
+    }
+
+    if (hasValidationError) {
+      return;
+    }
+
     onSave(data);
   };
 

@@ -36,7 +36,7 @@ Those would add cost and operational overhead without meaningfully improving out
 
 ## Recommended Topology
 
-Use one Hetzner VM running Docker Compose, with Cloudflare Tunnel and Cloudflare Access in front of the application.
+Use one Hostinger VPS running Docker Compose, with Cloudflare Tunnel and Cloudflare Access in front of the application.
 
 Traffic flow:
 
@@ -57,7 +57,6 @@ Aya
 LibreChat
   -> MongoDB
   -> Meilisearch
-  -> optional RAG services
 ```
 
 Important behavior in the current compose stack:
@@ -66,16 +65,16 @@ Important behavior in the current compose stack:
 - `cloudflared` runs on the host and proxies to localhost
 - containers restart automatically with `restart: unless-stopped`
 - Aya includes a health check on `/health`
-- application and database state is stored in named Docker volumes
+- application and database state is stored in bind-mounted folders on disk
 
-## Recommended VM
+## Recommended VPS
 
 For Aya Financial's current size, the existing target is reasonable:
 
-- Hetzner CX33
-- 4 vCPU
+- Hostinger KVM 2
+- 2 vCPU
 - 8 GB RAM
-- 80 GB NVMe
+- 100 GB NVMe
 - Ubuntu 24.04
 
 Why this is enough:
@@ -109,39 +108,36 @@ It is better described as reliable and practical for a small team, not "enterpri
 
 The deployment assets already live here:
 
-- `Blue/apps/aya-ops-bot/deploy/hetzner/docker-compose.yml`
-- `Blue/apps/aya-ops-bot/deploy/hetzner/env/aya.env.example`
-- `Blue/apps/aya-ops-bot/deploy/hetzner/env/librechat.env.example`
-- `Blue/apps/aya-ops-bot/deploy/hetzner/config/librechat.yaml.example`
-- `Blue/apps/aya-ops-bot/deploy/hetzner/cloudflared/config.yml.example`
+- `Blue/apps/aya-ops-bot/deploy/hostinger/docker-compose.yml`
+- `Blue/apps/aya-ops-bot/deploy/hostinger/env/aya.env.example`
+- `Blue/apps/aya-ops-bot/deploy/hostinger/env/librechat.env.example`
+- `Blue/apps/aya-ops-bot/deploy/hostinger/config/librechat.yaml.example`
+- `Blue/apps/aya-ops-bot/deploy/hostinger/cloudflared/config.yml.example`
 
 This guide should match those files. If the compose stack changes, update this document with it.
 
 ## Services In The Stack
 
-The current Hetzner deployment includes:
+The current Hostinger deployment includes:
 
 - `aya`: Aya ops bot, MCP surface, admin/API layer
 - `librechat`: employee-facing chat interface
 - `mongodb`: LibreChat persistence
 - `meilisearch`: LibreChat search dependency
-- `vectordb`: pgvector backing store for RAG features
-- `rag_api`: LibreChat RAG API
 
-Persistent Docker volumes:
+Persistent storage directories:
 
-- `aya_data`
-- `librechat_mongo`
-- `librechat_meili`
-- `librechat_pg`
-- `librechat_uploads`
-- `librechat_logs`
+- `deploy/hostinger/data/aya`
+- `deploy/hostinger/data/mongodb`
+- `deploy/hostinger/data/meilisearch`
+- `deploy/hostinger/data/librechat/uploads`
+- `deploy/hostinger/data/librechat/logs`
 
 ## Prerequisites
 
 Before deployment, have the following ready:
 
-- a Hetzner VM with Ubuntu 24.04
+- a Hostinger VPS with Ubuntu 24.04
 - Docker Engine installed
 - Docker Compose plugin installed
 - `git` and `curl`
@@ -152,7 +148,7 @@ Before deployment, have the following ready:
 
 Operator access should be one of:
 
-- Hetzner console
+- Hostinger browser terminal
 - Tailscale
 - a tightly restricted SSH path
 
@@ -175,7 +171,7 @@ For a small team, this gives strong practical protection without adding expensiv
 
 ### 1. Provision The VM
 
-Create the Hetzner VM with the recommended size above.
+Create the Hostinger VPS with the recommended size above.
 
 Basic host setup:
 
@@ -190,7 +186,7 @@ Basic host setup:
 Clone the Aya Financial repository onto the VM and navigate to:
 
 ```bash
-cd Blue/apps/aya-ops-bot/deploy/hetzner
+cd Blue/apps/aya-ops-bot/deploy/hostinger
 ```
 
 ### 3. Prepare Configuration
@@ -201,6 +197,12 @@ Copy the example files:
 cp env/aya.env.example env/aya.env
 cp env/librechat.env.example env/librechat.env
 cp config/librechat.yaml.example config/librechat.yaml
+```
+
+Create the storage folders before first boot:
+
+```bash
+mkdir -p data/aya data/mongodb data/meilisearch data/librechat/uploads data/librechat/logs
 ```
 
 If using the Cloudflare template, also prepare:
@@ -278,6 +280,7 @@ Expected results:
 - all containers are up or healthy
 - Aya responds successfully on `127.0.0.1:3010/health`
 - LibreChat responds on `127.0.0.1:3080`
+- data appears under `deploy/hostinger/data/`
 - neither application is listening on a public interface
 
 ### 7. Install Cloudflare Tunnel
@@ -370,14 +373,14 @@ For a small internal team, short maintenance windows are usually the correct tra
 
 Minimum backup targets:
 
-- Aya SQLite data in `aya_data`
-- LibreChat Mongo data in `librechat_mongo`
-- LibreChat uploads in `librechat_uploads`
+- Aya SQLite data in `deploy/hostinger/data/aya`
+- LibreChat Mongo data in `deploy/hostinger/data/mongodb`
+- LibreChat uploads in `deploy/hostinger/data/librechat/uploads`
 
 Recommended baseline:
 
-- use Hetzner VM snapshots before major changes
-- perform periodic backups of the important volumes
+- use Hostinger VPS snapshots before major changes
+- perform periodic backups of the important storage directories
 - store backups off the VM
 - test at least one restore path before relying on the system operationally
 
@@ -422,7 +425,7 @@ The right architecture here is the one the team can actually operate confidently
 This deployment supports claims like:
 
 - architected a cost-conscious internal AI operations platform
-- orchestrated Docker-based deployments on Hetzner
+- orchestrated Docker-based deployments on Hostinger VPS
 - secured internal access with Cloudflare Tunnel and Cloudflare Access
 - delivered a reliable one-VM deployment model for a small team
 

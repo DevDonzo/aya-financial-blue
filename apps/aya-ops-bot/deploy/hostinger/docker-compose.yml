@@ -15,7 +15,7 @@ services:
     ports:
       - "127.0.0.1:3010:3010"
     volumes:
-      - aya_data:/app/data
+      - ./data/aya:/app/data
     depends_on:
       - mongodb
     networks:
@@ -45,19 +45,16 @@ services:
       NODE_ENV: production
       MONGO_URI: mongodb://mongodb:27017/LibreChat
       MEILI_HOST: http://meilisearch:7700
-      RAG_PORT: ${RAG_PORT:-8000}
-      RAG_API_URL: http://rag_api:${RAG_PORT:-8000}
     depends_on:
       - mongodb
       - meilisearch
-      - rag_api
       - aya
     ports:
       - "127.0.0.1:3080:3080"
     volumes:
       - ./config/librechat.yaml:/app/librechat.yaml:ro
-      - librechat_uploads:/app/uploads
-      - librechat_logs:/app/api/logs
+      - ./data/librechat/uploads:/app/uploads
+      - ./data/librechat/logs:/app/api/logs
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -69,7 +66,7 @@ services:
     restart: unless-stopped
     command: mongod --noauth
     volumes:
-      - librechat_mongo:/data/db
+      - ./data/mongodb:/data/db
     networks:
       - aya_private
 
@@ -83,45 +80,10 @@ services:
       MEILI_HOST: http://meilisearch:7700
       MEILI_NO_ANALYTICS: "true"
     volumes:
-      - librechat_meili:/meili_data
-    networks:
-      - aya_private
-
-  vectordb:
-    container_name: aya-chat-vectordb
-    image: pgvector/pgvector:0.8.0-pg15-trixie
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: mydatabase
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
-    volumes:
-      - librechat_pg:/var/lib/postgresql/data
-    networks:
-      - aya_private
-
-  rag_api:
-    container_name: aya-chat-rag
-    image: registry.librechat.ai/danny-avila/librechat-rag-api-dev-lite:latest
-    restart: unless-stopped
-    env_file:
-      - ./env/librechat.env
-    environment:
-      DB_HOST: vectordb
-      RAG_PORT: ${RAG_PORT:-8000}
-    depends_on:
-      - vectordb
+      - ./data/meilisearch:/meili_data
     networks:
       - aya_private
 
 networks:
   aya_private:
     driver: bridge
-
-volumes:
-  aya_data:
-  librechat_mongo:
-  librechat_meili:
-  librechat_pg:
-  librechat_uploads:
-  librechat_logs:
