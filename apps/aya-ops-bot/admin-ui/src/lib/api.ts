@@ -51,6 +51,18 @@ export type OverviewResponse = {
     failureCount: number;
     activeEmployees: number;
     latestInteractionAt: string | null;
+    planner: {
+      plannedCount: number;
+      averageConfidence: number;
+      clarificationCount: number;
+      unmatchedCount: number;
+      lowConfidenceCount: number;
+      activeRecordFollowUps: number;
+      topIntents: Array<{
+        intent: string;
+        count: number;
+      }>;
+    };
   };
   employees: EmployeeActivityRow[];
   sync: {

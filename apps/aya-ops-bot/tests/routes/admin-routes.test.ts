@@ -55,6 +55,24 @@ describe("admin routes", () => {
         requestJson: { prompt: "hello" },
         responseJson: { message: "ok" },
       });
+      await insertBotAuditLog({
+        id: "audit_2",
+        employeeId: "admin_1",
+        transport: "web",
+        inboundText: "move this to underwriting",
+        detectedIntent: "records.move",
+        adapter: "planner",
+        outcome: "needs_clarification",
+        responseText: "Which client should I move?",
+        requestJson: {
+          plan: {
+            intent: "records.move",
+            confidence: 0.74,
+            matchedSignals: ["records:move:context"],
+          },
+        },
+        responseJson: { clarificationRequired: true },
+      });
 
       const detailResponse = await app.inject({
         method: "GET",
@@ -65,6 +83,22 @@ describe("admin routes", () => {
       });
       expect(detailResponse.statusCode).toBe(200);
       expect(detailResponse.json().item.request_json).toEqual({ prompt: "hello" });
+
+      const overviewResponse = await app.inject({
+        method: "GET",
+        url: "/admin/api/overview",
+        headers: {
+          cookie: "aya_session=admin-session-token",
+        },
+      });
+      expect(overviewResponse.statusCode).toBe(200);
+      expect(overviewResponse.json().overview.planner).toMatchObject({
+        plannedCount: 1,
+        clarificationCount: 1,
+        lowConfidenceCount: 1,
+        activeRecordFollowUps: 1,
+        topIntents: [{ intent: "records.move", count: 1 }],
+      });
 
       const syncResponse = await app.inject({
         method: "POST",

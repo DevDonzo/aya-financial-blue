@@ -39,6 +39,8 @@ export const messageBodySchema = z.object({
   actorEmployeeId: z.string().trim().min(1).optional(),
   actorEmployeeEmail: z.string().trim().email().optional(),
   actorEmployeeName: z.string().trim().min(1).optional(),
+  actorBlueTokenId: z.string().trim().min(1).optional(),
+  actorBlueTokenSecret: z.string().trim().min(1).optional(),
   message: z.string().trim().min(1),
 });
 

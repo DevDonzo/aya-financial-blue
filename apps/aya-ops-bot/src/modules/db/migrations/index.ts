@@ -161,6 +161,18 @@ export async function runMigrations() {
       FOREIGN KEY(employee_id) REFERENCES employees(id)
     );
 
+    CREATE TABLE IF NOT EXISTS active_record_context (
+      employee_id TEXT PRIMARY KEY,
+      transport TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      record_title TEXT NOT NULL,
+      list_title TEXT,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(employee_id) REFERENCES employees(id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_blue_lists_cache_workspace
       ON blue_lists_cache(workspace_id);
     CREATE INDEX IF NOT EXISTS idx_blue_lists_cache_normalized
@@ -177,6 +189,8 @@ export async function runMigrations() {
       ON bot_audit_logs(employee_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_pending_record_choices_expires_at
       ON pending_record_choices(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_active_record_context_expires_at
+      ON active_record_context(expires_at);
   `);
 
   ensureColumn("employees", "email", "TEXT");

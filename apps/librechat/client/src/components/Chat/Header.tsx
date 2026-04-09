@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { OpenSidebar } from './Menus';
+import AyaRuntimeBadge from './AyaRuntimeBadge';
 
 function Header() {
   return (
@@ -7,8 +8,9 @@ function Header() {
       <div className="flex items-center gap-2 px-1">
         <OpenSidebar className="md:hidden" />
         <div className="rounded-full border border-border-light bg-surface-chat px-3 py-1 text-sm font-medium">
-          Aya Ops Assistant
+          Aya Employee Copilot
         </div>
+        <AyaRuntimeBadge />
       </div>
       <div />
     </div>

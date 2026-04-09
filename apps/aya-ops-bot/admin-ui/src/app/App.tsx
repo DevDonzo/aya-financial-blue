@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Modal } from "../components/Modal";
 import { EmployeeActivityTable } from "../features/activity/EmployeeActivityTable";
+import { CommandCenter } from "../features/dashboard/CommandCenter";
 import { ReportingCenter } from "../features/dashboard/ReportingCenter";
 import { IdentityLinksManager } from "../features/identity/IdentityLinksManager";
 import { SyncControlCenter } from "../features/sync/SyncControlCenter";
@@ -777,6 +778,14 @@ export function App() {
 
             {activeView === "operations" ? (
               <>
+                <CommandCenter
+                  overview={overviewQuery.data?.overview}
+                  employees={employeeDirectory}
+                  activity={employeeActivityQuery.data?.items ?? []}
+                  logs={logsQuery.data?.items ?? []}
+                  syncStates={overviewQuery.data?.sync.states ?? []}
+                />
+
                 <section className="overview-grid">
                   <MetricCard
                     label="Interactions Today"

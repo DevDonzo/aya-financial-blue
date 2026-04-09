@@ -66,6 +66,7 @@ Important behavior in the current compose stack:
 - containers restart automatically with `restart: unless-stopped`
 - Aya includes a health check on `/health`
 - application and database state is stored in bind-mounted folders on disk
+- LibreChat is the employee shell, while Aya is the backend service boundary for business logic, audit, and Blue integration
 
 ## Recommended VPS
 

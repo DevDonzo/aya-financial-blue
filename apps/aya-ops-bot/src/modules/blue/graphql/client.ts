@@ -1,6 +1,7 @@
 import { config } from "../../../config.js";
 import { ExternalServiceError, ValidationError } from "../../../app/errors.js";
 import { logger } from "../../../lib/logger.js";
+import { buildBlueCommentContent } from "../comment-content.js";
 import type {
   BlueActivityEvent,
   BlueDashboard,
@@ -208,6 +209,7 @@ export async function fetchWorkspaceUsers(workspaceId: string) {
 export async function fetchWorkspaceLists(input: {
   workspaceId: string;
   updatedAfter?: string | null;
+  auth?: BlueRequestAuth | null;
 }) {
   const data = await blueGraphqlRequest<{
     todoLists: Array<BlueTodoList & { todosCount: number }>;
@@ -228,7 +230,7 @@ export async function fetchWorkspaceLists(input: {
     {
       projectId: input.workspaceId,
     },
-    { projectId: input.workspaceId },
+    { projectId: input.workspaceId, auth: input.auth },
   );
 
   return data.todoLists;
@@ -238,6 +240,7 @@ export async function fetchWorkspaceListRecords(input: {
   workspaceId: string;
   listId: string;
   updatedAfter?: string | null;
+  auth?: BlueRequestAuth | null;
 }) {
   const items: BlueRecord[] = [];
   let skip = 0;
@@ -309,7 +312,7 @@ export async function fetchWorkspaceListRecords(input: {
         skip,
         first: config.BLUE_GRAPHQL_PAGE_SIZE,
       },
-      { projectId: input.workspaceId },
+      { projectId: input.workspaceId, auth: input.auth },
     );
 
     const rawPageItems = data.todoList?.todos ?? [];
@@ -495,8 +498,12 @@ export async function fetchWorkspaceActivity(input: {
 }
 
 export async function fetchBlueReportingCapability(
-  companyId = config.BLUE_COMPANY_ID,
+  input?: {
+    companyId?: string;
+    auth?: BlueRequestAuth | null;
+  },
 ) {
+  const companyId = input?.companyId ?? config.BLUE_COMPANY_ID;
   if (!companyId) {
     return {
       configured: false,
@@ -547,6 +554,7 @@ export async function fetchBlueReportingCapability(
       }
     `,
     { companyId },
+    input?.auth ? { auth: input.auth } : undefined,
   );
 
   const company = data.company;
@@ -574,6 +582,7 @@ export async function fetchBlueReportingCapability(
 export async function fetchBlueDashboards(input?: {
   companyId?: string;
   take?: number;
+  auth?: BlueRequestAuth | null;
 }) {
   const companyId = input?.companyId ?? config.BLUE_COMPANY_ID;
   const take = input?.take ?? 12;
@@ -622,6 +631,7 @@ export async function fetchBlueDashboards(input?: {
       }
     `,
     { companyId, take },
+    input?.auth ? { auth: input.auth } : undefined,
   );
 
   return data.dashboards;
@@ -630,6 +640,7 @@ export async function fetchBlueDashboards(input?: {
 export async function fetchBlueReports(input?: {
   companyId?: string;
   take?: number;
+  auth?: BlueRequestAuth | null;
 }) {
   const companyId = input?.companyId ?? config.BLUE_COMPANY_ID;
   const take = input?.take ?? 12;
@@ -693,9 +704,10 @@ export async function fetchBlueReports(input?: {
             hasPreviousPage
           }
         }
-      `,
-      { companyId, take },
-    );
+    `,
+    { companyId, take },
+    input?.auth ? { auth: input.auth } : undefined,
+  );
 
     listedReports = data.reports;
   } catch (error) {
@@ -703,7 +715,10 @@ export async function fetchBlueReports(input?: {
       error instanceof Error ? error : new Error("Failed to load Blue reports");
   }
 
-  const fallbackItems = await fetchBlueReportsByIds(config.BLUE_REPORT_FALLBACK_IDS);
+  const fallbackItems = await fetchBlueReportsByIds(
+    config.BLUE_REPORT_FALLBACK_IDS,
+    input?.auth ?? null,
+  );
   const dedupedItems = dedupeBlueReports(
     [...listedReports.items, ...fallbackItems].filter((item) =>
       isBlueReportInWorkspace(item, config.BLUE_WORKSPACE_ID),
@@ -724,7 +739,10 @@ export async function fetchBlueReports(input?: {
   throw listError;
 }
 
-export async function fetchBlueReportById(reportId: string) {
+export async function fetchBlueReportById(
+  reportId: string,
+  auth?: BlueRequestAuth | null,
+) {
   if (!reportId.trim()) {
     throw new ValidationError("Report id is required");
   }
@@ -767,12 +785,16 @@ export async function fetchBlueReportById(reportId: string) {
       }
     `,
     { id: reportId.trim() },
+    auth ? { auth } : undefined,
   );
 
   return data.report;
 }
 
-async function fetchBlueReportsByIds(reportIds: string[]) {
+async function fetchBlueReportsByIds(
+  reportIds: string[],
+  auth?: BlueRequestAuth | null,
+) {
   if (!reportIds.length) {
     return [];
   }
@@ -780,7 +802,7 @@ async function fetchBlueReportsByIds(reportIds: string[]) {
   const results = await Promise.all(
     reportIds.map(async (reportId) => {
       try {
-        return await fetchBlueReportById(reportId);
+        return await fetchBlueReportById(reportId, auth);
       } catch (error) {
         logger.warn(
           {
@@ -1241,8 +1263,15 @@ export async function createComment(input: {
   text: string;
   auth?: BlueRequestAuth | null;
 }) {
-  const text = input.text.trim();
-  const html = `<p>${escapeHtml(text)}</p>`;
+  const teammates = await fetchWorkspaceUsers(input.workspaceId);
+  const { html, text } = await buildBlueCommentContent({
+    text: input.text,
+    employees: teammates.map((user) => ({
+      id: user.id,
+      displayName: user.fullName,
+      email: user.email,
+    })),
+  });
   const data = await blueGraphqlRequest<{
     createComment: BlueComment;
   }>(
@@ -1275,7 +1304,7 @@ export async function createComment(input: {
         text,
         category: "TODO",
         categoryId: input.recordId,
-        tiptap: false,
+        tiptap: true,
       },
     },
     { projectId: input.workspaceId, auth: input.auth },

@@ -85,6 +85,14 @@ export async function getAdminDashboardOverview(dateIso: string) {
     .limit(1)
     .executeTakeFirst();
 
+  const plannerRows = await db
+    .selectFrom("bot_audit_logs")
+    .select(["detected_intent", "outcome", "request_json"])
+    .where(sql`substr(created_at, 1, 10)`, "=", dateIso)
+    .execute();
+
+  const planner = summarizePlannerOverview(plannerRows);
+
   return {
     date: dateIso,
     totalInteractions: counts?.total_interactions ?? 0,
@@ -92,6 +100,7 @@ export async function getAdminDashboardOverview(dateIso: string) {
     failureCount: counts?.failure_count ?? 0,
     activeEmployees: counts?.active_employees ?? 0,
     latestInteractionAt: latest?.created_at ?? null,
+    planner,
   };
 }
 
@@ -182,4 +191,100 @@ export async function getAdminDashboardLogDetail(id: string) {
     ])
     .where("l.id", "=", id)
     .executeTakeFirst();
+}
+
+function summarizePlannerOverview(
+  rows: Array<{
+    detected_intent: string | null;
+    outcome: string;
+    request_json: string | null;
+  }>,
+) {
+  let plannedCount = 0;
+  let confidenceTotal = 0;
+  let confidenceSamples = 0;
+  let clarificationCount = 0;
+  let unmatchedCount = 0;
+  let lowConfidenceCount = 0;
+  let activeRecordFollowUps = 0;
+  const intentCounts = new Map<string, number>();
+
+  for (const row of rows) {
+    if (row.outcome === "needs_clarification") {
+      clarificationCount += 1;
+    }
+    if (row.outcome === "unmatched") {
+      unmatchedCount += 1;
+    }
+
+    const requestJson = safeParseJson(row.request_json);
+    const plan = isObject(requestJson) && isObject(requestJson.plan)
+      ? requestJson.plan
+      : null;
+
+    const intent =
+      typeof plan?.intent === "string"
+        ? plan.intent
+        : row.detected_intent ?? null;
+    if (intent) {
+      intentCounts.set(intent, (intentCounts.get(intent) ?? 0) + 1);
+    }
+
+    if (!plan) {
+      continue;
+    }
+
+    plannedCount += 1;
+
+    if (typeof plan.confidence === "number") {
+      confidenceTotal += plan.confidence;
+      confidenceSamples += 1;
+      if (plan.confidence < 0.75) {
+        lowConfidenceCount += 1;
+      }
+    }
+
+    if (
+      Array.isArray(plan.matchedSignals) &&
+      plan.matchedSignals.some(
+        (signal) =>
+          typeof signal === "string" &&
+          (signal.includes(":context") || signal === "pending-choice"),
+      )
+    ) {
+      activeRecordFollowUps += 1;
+    }
+  }
+
+  return {
+    plannedCount,
+    averageConfidence:
+      confidenceSamples > 0
+        ? Number((confidenceTotal / confidenceSamples).toFixed(2))
+        : 0,
+    clarificationCount,
+    unmatchedCount,
+    lowConfidenceCount,
+    activeRecordFollowUps,
+    topIntents: [...intentCounts.entries()]
+      .map(([intent, count]) => ({ intent, count }))
+      .sort((left, right) => right.count - left.count || left.intent.localeCompare(right.intent))
+      .slice(0, 6),
+  };
+}
+
+function safeParseJson(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

@@ -333,6 +333,7 @@ describe('tests for the new helper functions used by the MCP connection status e
 
       expect(result).toEqual({
         requiresOAuth: false,
+        inspectionFailed: false,
         connectionState: 'connected',
       });
     });
@@ -361,6 +362,7 @@ describe('tests for the new helper functions used by the MCP connection status e
 
       expect(result).toEqual({
         requiresOAuth: false,
+        inspectionFailed: false,
         connectionState: 'connecting',
       });
     });
@@ -381,6 +383,7 @@ describe('tests for the new helper functions used by the MCP connection status e
 
       expect(result).toEqual({
         requiresOAuth: false,
+        inspectionFailed: false,
         connectionState: 'disconnected',
       });
     });
@@ -417,6 +420,7 @@ describe('tests for the new helper functions used by the MCP connection status e
 
       expect(result).toEqual({
         requiresOAuth: false,
+        inspectionFailed: false,
         connectionState: 'connected',
       });
     });
@@ -478,6 +482,7 @@ describe('tests for the new helper functions used by the MCP connection status e
 
       expect(result).toEqual({
         requiresOAuth: true,
+        inspectionFailed: false,
         connectionState: 'error',
       });
     });
@@ -516,6 +521,7 @@ describe('tests for the new helper functions used by the MCP connection status e
 
       expect(result).toEqual({
         requiresOAuth: true,
+        inspectionFailed: false,
         connectionState: 'connecting',
       });
     });
@@ -550,6 +556,7 @@ describe('tests for the new helper functions used by the MCP connection status e
 
       expect(result).toEqual({
         requiresOAuth: true,
+        inspectionFailed: false,
         connectionState: 'disconnected',
       });
     });
@@ -576,6 +583,7 @@ describe('tests for the new helper functions used by the MCP connection status e
 
       expect(result).toEqual({
         requiresOAuth: true,
+        inspectionFailed: false,
         connectionState: 'connecting',
       });
       expect(mockOAuthReconnectionManager.isReconnecting).toHaveBeenCalledWith(
@@ -614,6 +622,7 @@ describe('tests for the new helper functions used by the MCP connection status e
 
       expect(result).toEqual({
         requiresOAuth: true,
+        inspectionFailed: false,
         connectionState: 'connected',
       });
 
@@ -643,11 +652,33 @@ describe('tests for the new helper functions used by the MCP connection status e
 
       expect(result).toEqual({
         requiresOAuth: false,
+        inspectionFailed: false,
         connectionState: 'disconnected',
       });
 
       // Should not call flow manager since server doesn't require OAuth
       expect(mockFlowManager.getFlowState).not.toHaveBeenCalled();
+    });
+
+    it('should surface inspection failures for unreachable MCP backends', async () => {
+      const appConnections = new Map();
+      const userConnections = new Map();
+      const oauthServers = new Set();
+
+      const result = await getServerConnectionStatus(
+        mockUserId,
+        mockServerName,
+        { updatedAt: Date.now(), inspectionFailed: true },
+        appConnections,
+        userConnections,
+        oauthServers,
+      );
+
+      expect(result).toEqual({
+        requiresOAuth: false,
+        inspectionFailed: true,
+        connectionState: 'disconnected',
+      });
     });
   });
 });

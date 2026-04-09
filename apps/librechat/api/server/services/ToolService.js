@@ -19,6 +19,7 @@ const {
   buildWebSearchContext,
   buildImageToolContext,
   buildToolClassification,
+  createSafeUser,
 } = require('@librechat/api');
 const {
   Time,
@@ -1172,7 +1173,10 @@ async function loadToolsForExecution({
 }) {
   const appConfig = req.config;
   const allLoadedTools = [];
-  const configurable = { userMCPAuthMap };
+  const configurable = {
+    user: createSafeUser(req.user),
+    userMCPAuthMap,
+  };
 
   if (actionsEnabled === undefined) {
     const enabledCapabilities = await resolveAgentCapabilities(req, appConfig, agent?.id);

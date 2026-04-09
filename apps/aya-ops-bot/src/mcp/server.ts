@@ -10,6 +10,7 @@ import {
   getClientComments,
   getClientDetail,
   getEmployeeDaySummary,
+  getEmployeeFollowUpQueue,
   getEmployeeWorkload,
   getTeamDaySummary,
   moveClientToStage,
@@ -58,11 +59,19 @@ async function getHeaderActor(
     fallback?.employeeName ??
     undefined;
 
-  return await resolveActorIdentity({
+  const actor = await resolveActorIdentity({
     employeeId: employeeId || undefined,
     employeeEmail: employeeEmail || undefined,
     employeeName: employeeName || undefined,
   });
+  if (!actor) {
+    return null;
+  }
+
+  return {
+    ...actor,
+    email: actor.email ?? employeeEmail ?? undefined,
+  };
 }
 
 function getHeaderBlueAuth(
@@ -172,6 +181,36 @@ function createAyaMcpServer() {
   );
 
   server.registerTool(
+    "aya_get_current_employee",
+    {
+      title: "Current Employee Identity",
+      description:
+        "Confirm who is currently signed into Aya, including the resolved employee name, email, and role. Use this when the user asks who they are, which account is signed in, or what identity the assistant sees.",
+      inputSchema: {},
+    },
+    async (_args, extra) => {
+      const actor = await requireToolActor(extra.requestInfo?.headers);
+      const responseText = [
+        `You are signed in as ${actor.displayName}.`,
+        actor.email ? `Email: ${actor.email}` : null,
+        actor.roleName ? `Role: ${actor.roleName}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      return {
+        content: [{ type: "text", text: responseText }],
+        structuredContent: toStructuredContent({
+          employeeId: actor.employeeId,
+          displayName: actor.displayName,
+          email: actor.email ?? null,
+          roleName: actor.roleName ?? null,
+        }),
+      };
+    },
+  );
+
+  server.registerTool(
     "aya_search_clients",
     {
       title: "Search Clients",
@@ -184,7 +223,7 @@ function createAyaMcpServer() {
     },
     async ({ query, limit }, extra) => {
       const actor = await getHeaderActor(extra.requestInfo?.headers);
-      const result = await searchClients(query, limit, actor);
+      const result = await searchClients({ query, limit, actor, transport: "mcp" });
       const responseText =
         result.items.length === 0
           ? `No cached Blue clients matched "${query}".`
@@ -221,9 +260,10 @@ function createAyaMcpServer() {
       const actor = await getHeaderActor(extra.requestInfo?.headers);
       const result = await getClientComments({
         recordId,
-        clientQuery,
+        recordQuery: clientQuery,
         limit,
         actor,
+        transport: "mcp",
       });
       return {
         content: [{ type: "text", text: result.responseText }],
@@ -248,28 +288,15 @@ function createAyaMcpServer() {
     },
     async ({ recordId, clientQuery }, extra) => {
       const actor = await getHeaderActor(extra.requestInfo?.headers);
-      const result = await getClientDetail({ recordId, clientQuery, actor });
-      const contactBits = [
-        result.detail.contact.phone
-          ? `Phone: ${result.detail.contact.phone}`
-          : null,
-        result.detail.contact.email
-          ? `Email: ${result.detail.contact.email}`
-          : null,
-      ].filter(Boolean);
-
-      const responseText = [
-        `${result.recordTitle} is currently in ${result.detail.list}.`,
-        contactBits.join(" | "),
-        result.detail.recentActivity.length > 0
-          ? `Recent activity: ${result.detail.recentActivity[0]?.summary ?? "n/a"}`
-          : "No recent activity captured.",
-      ]
-        .filter(Boolean)
-        .join("\n");
+      const result = await getClientDetail({
+        recordId,
+        recordQuery: clientQuery,
+        actor,
+        transport: "mcp",
+      });
 
       return {
-        content: [{ type: "text", text: responseText }],
+        content: [{ type: "text", text: result.responseText }],
         structuredContent: toStructuredContent(result),
       };
     },
@@ -334,7 +361,9 @@ function createAyaMcpServer() {
     },
     async (_args, extra) => {
       await requireAdminToolActor(extra.requestInfo?.headers);
-      const result = await getReportingOverview();
+      const result = await getReportingOverview({
+        auth: getHeaderBlueAuth(extra.requestInfo?.headers),
+      });
       return {
         content: [{ type: "text", text: result.summaryText }],
         structuredContent: toStructuredContent(result),
@@ -354,9 +383,40 @@ function createAyaMcpServer() {
     },
     async ({ question }, extra) => {
       await requireAdminToolActor(extra.requestInfo?.headers);
-      const result = await answerReportingQuestion({ question });
+      const result = await answerReportingQuestion({
+        question,
+        auth: getHeaderBlueAuth(extra.requestInfo?.headers),
+      });
       return {
         content: [{ type: "text", text: result.answerText }],
+        structuredContent: toStructuredContent(result),
+      };
+    },
+  );
+
+  server.registerTool(
+    "aya_get_follow_up_queue",
+    {
+      title: "Follow-Up Queue",
+      description:
+        "Show which files need follow-up first for one internal employee: overdue files, due-today files, and stale files with no recent movement.",
+      inputSchema: {
+        employeeId: z.string().optional(),
+        employeeEmail: z.string().email().optional(),
+        employeeName: z.string().optional(),
+        date: z.string().optional(),
+      },
+    },
+    async ({ employeeId, employeeEmail, employeeName, date }, extra) => {
+      const actor = await getHeaderActor(extra.requestInfo?.headers);
+      const result = await getEmployeeFollowUpQueue({
+        employeeId: employeeId ?? actor?.employeeId,
+        employeeEmail: employeeEmail ?? actor?.email,
+        employeeName: employeeName ?? actor?.displayName,
+        date,
+      });
+      return {
+        content: [{ type: "text", text: result.responseText }],
         structuredContent: toStructuredContent(result),
       };
     },
@@ -382,7 +442,7 @@ function createAyaMcpServer() {
         employeeName: employeeName ?? actor?.displayName,
       });
       return {
-        content: [{ type: "text", text: result.rawOutput }],
+        content: [{ type: "text", text: result.responseText }],
         structuredContent: toStructuredContent(result),
       };
     },

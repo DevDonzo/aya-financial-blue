@@ -10,8 +10,11 @@ export type ActivitySource =
   | "slack";
 
 export type IntentName =
+  | "identity.self"
   | "records.list_assigned"
+  | "records.follow_up"
   | "records.search"
+  | "records.detail"
   | "records.create"
   | "records.move"
   | "comments.list_recent"
@@ -46,6 +49,12 @@ export interface IntentMatch {
   intent: IntentName;
   confidence: number;
   parameters: Record<string, string | number | boolean | undefined>;
+}
+
+export interface IntentPlan extends IntentMatch {
+  requiresClarification: boolean;
+  clarificationQuestion?: string;
+  matchedSignals: string[];
 }
 
 export interface NormalizedActivityEvent {

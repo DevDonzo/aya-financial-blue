@@ -1,19 +1,33 @@
 import { config } from "../config.js";
+import type { BlueRequestAuth } from "../domain/types.js";
 import {
   fetchBlueDashboards,
   fetchBlueReportingCapability,
   fetchBlueReports,
 } from "../modules/blue/graphql/client.js";
 
-export async function getReportingOverview() {
-  const capability = await fetchBlueReportingCapability(config.BLUE_COMPANY_ID);
+export async function getReportingOverview(input?: {
+  auth?: BlueRequestAuth | null;
+}) {
+  const capability = await fetchBlueReportingCapability({
+    companyId: config.BLUE_COMPANY_ID,
+    auth: input?.auth ?? null,
+  });
   const dashboards = capability.supportsDashboards
-    ? await fetchBlueDashboards({ companyId: config.BLUE_COMPANY_ID, take: 12 })
+    ? await fetchBlueDashboards({
+        companyId: config.BLUE_COMPANY_ID,
+        take: 12,
+        auth: input?.auth ?? null,
+      })
     : { items: [], pageInfo: { hasNextPage: false, hasPreviousPage: false } };
   const shouldLoadReports =
     capability.supportsReports || config.BLUE_REPORT_FALLBACK_IDS.length > 0;
   const reports = shouldLoadReports
-    ? await fetchBlueReports({ companyId: config.BLUE_COMPANY_ID, take: 12 })
+    ? await fetchBlueReports({
+        companyId: config.BLUE_COMPANY_ID,
+        take: 12,
+        auth: input?.auth ?? null,
+      })
     : { items: [], totalCount: 0, hasNextPage: false, hasPreviousPage: false };
   const reportsStatusText = reports.items.length
     ? "Saved Blue reports are available in this workspace."
@@ -43,8 +57,11 @@ export async function getReportingOverview() {
   };
 }
 
-export async function answerReportingQuestion(input: { question: string }) {
-  const overview = await getReportingOverview();
+export async function answerReportingQuestion(input: {
+  question: string;
+  auth?: BlueRequestAuth | null;
+}) {
+  const overview = await getReportingOverview({ auth: input.auth ?? null });
   const question = input.question.trim().toLowerCase();
 
   let answerText: string;

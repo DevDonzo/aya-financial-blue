@@ -18,6 +18,7 @@ import { syncWorkspaceIndex } from "../blue/workspace-index.js";
 import { config } from "../config.js";
 import { NotFoundError } from "../app/errors.js";
 import { getReportingOverview } from "../reporting/service.js";
+import { normalizeBlueRequestAuth } from "../modules/blue/request-auth.js";
 import {
   adminLogsQuerySchema,
   adminTranscriptsQuerySchema,
@@ -107,8 +108,18 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/admin/api/reporting",
     { preHandler: [app.requireRoles(["admin"])] },
-    async () => {
-      const overview = await getReportingOverview();
+    async (request) => {
+      const overview = await getReportingOverview({
+        auth: normalizeBlueRequestAuth({
+          tokenId: getHeaderValue(
+            request.headers,
+            "x-aya-blue-token-id",
+          ) ?? getHeaderValue(request.headers, "x-blue-token-id"),
+          tokenSecret:
+            getHeaderValue(request.headers, "x-aya-blue-token-secret") ??
+            getHeaderValue(request.headers, "x-blue-token-secret"),
+        }),
+      });
       return {
         capability: overview.capability,
         dashboards: overview.dashboards,
@@ -175,4 +186,17 @@ function safeParseJson(value: string | null) {
   } catch {
     return value;
   }
+}
+
+function getHeaderValue(
+  headers: Record<string, string | string[] | undefined>,
+  name: string,
+) {
+  const value =
+    headers[name] ?? headers[name.toLowerCase()] ?? headers[name.toUpperCase()];
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
 }

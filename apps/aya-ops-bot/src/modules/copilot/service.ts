@@ -1,0 +1,774 @@
+import { createId } from "../../db.js";
+import type {
+  BlueRequestAuth,
+  EmployeeIdentity,
+  IntentName,
+  IntentPlan,
+} from "../../domain/types.js";
+import {
+  normalizeBlueRequestAuth,
+} from "../blue/request-auth.js";
+import {
+  getActiveRecordContextForActor,
+} from "../disambiguation/active-record-context.js";
+import {
+  clearPendingRecordChoiceForActor,
+  resolvePendingRecordChoice,
+} from "../disambiguation/record-choices.js";
+import { resolveActorIdentity } from "../identity/service.js";
+import {
+  addCommentToClient,
+  answerReportingQuestion,
+  createClientRecord,
+  getClientComments,
+  getClientDetail,
+  getEmployeeDaySummary,
+  getEmployeeFollowUpQueue,
+  getEmployeeWorkload,
+  getReportingOverview,
+  getTeamDaySummary,
+  moveClientToStage,
+  searchClients,
+} from "./actions.js";
+import { planEmployeeIntent } from "./planner.js";
+import { insertBotAuditLog } from "../../store/audit-store.js";
+import { PermissionError } from "../../app/errors.js";
+
+export interface InboundMessagePayload {
+  transport?: string;
+  senderId?: string;
+  senderLabel?: string;
+  actorEmployeeId?: string;
+  actorEmployeeEmail?: string;
+  actorEmployeeName?: string;
+  actorBlueTokenId?: string;
+  actorBlueTokenSecret?: string;
+  message: string;
+}
+
+export interface MessageResponse {
+  matched: boolean;
+  intent?: string;
+  actor: EmployeeIdentity;
+  responseText: string;
+  clarificationRequired?: boolean;
+  plan?: IntentPlan;
+  data?: unknown;
+}
+
+interface PendingExecutionResult {
+  intent: IntentName;
+  responseText: string;
+  data?: unknown;
+}
+
+export function resolvePayloadBlueAuth(
+  payload: InboundMessagePayload,
+): BlueRequestAuth | null {
+  return normalizeBlueRequestAuth({
+    tokenId: payload.actorBlueTokenId,
+    tokenSecret: payload.actorBlueTokenSecret,
+  });
+}
+
+export function redactPayloadForAudit(payload: InboundMessagePayload) {
+  return {
+    ...payload,
+    actorBlueTokenId: payload.actorBlueTokenId ? "[redacted]" : undefined,
+    actorBlueTokenSecret: payload.actorBlueTokenSecret
+      ? "[redacted]"
+      : undefined,
+  };
+}
+
+export async function resolveActorFromPayload(
+  payload: InboundMessagePayload,
+): Promise<EmployeeIdentity> {
+  const actor = await resolveActorIdentity({
+    employeeId: payload.actorEmployeeId,
+    employeeEmail: payload.actorEmployeeEmail,
+    employeeName: payload.actorEmployeeName,
+    transport: payload.transport,
+    senderId: payload.senderId,
+    autoLinkByEmail: true,
+  });
+
+  return {
+    ...actor,
+    email: actor.email ?? payload.actorEmployeeEmail ?? undefined,
+  };
+}
+
+export async function planInboundMessage(payload: InboundMessagePayload) {
+  const actor = await resolveActorFromPayload(payload);
+  const transport = payload.transport ?? "http";
+  const activeRecordContext = await getActiveRecordContextForActor(
+    actor,
+    transport,
+  );
+
+  const plan = planEmployeeIntent({
+    actor,
+    message: payload.message,
+    nowIso: new Date().toISOString(),
+    hasActiveRecordContext: Boolean(activeRecordContext),
+  });
+
+  return {
+    actor,
+    transport,
+    hasActiveRecordContext: Boolean(activeRecordContext),
+    activeRecordContext,
+    plan,
+  };
+}
+
+export async function handleInboundMessage(
+  payload: InboundMessagePayload,
+): Promise<MessageResponse> {
+  const actor = await resolveActorFromPayload(payload);
+  const transport = payload.transport ?? "http";
+  const blueAuth = resolvePayloadBlueAuth(payload);
+  const auditPayload = redactPayloadForAudit(payload);
+  const activeRecordContext = await getActiveRecordContextForActor(
+    actor,
+    transport,
+  );
+
+  const plan = planEmployeeIntent({
+    actor,
+    message: payload.message,
+    nowIso: new Date().toISOString(),
+    hasActiveRecordContext: Boolean(activeRecordContext),
+  });
+
+  if (!plan) {
+    const pending = await continuePendingRecordChoice(
+      actor,
+      transport,
+      payload.message,
+      blueAuth,
+    );
+    if (pending) {
+      const syntheticPlan: IntentPlan = {
+        intent: pending.intent,
+        confidence: 1,
+        parameters: {
+          selection: payload.message.trim(),
+        },
+        requiresClarification: false,
+        matchedSignals: ["pending-choice"],
+      };
+      await recordAudit({
+        actor,
+        transport,
+        inboundText: payload.message,
+        detectedIntent: pending.intent,
+        adapter: "pending-record-choice",
+        commandName: getAuditCommandName(pending.intent),
+        commandArgs: JSON.stringify({ selection: payload.message.trim() }),
+        outcome: "success",
+        responseText: pending.responseText,
+        requestJson: {
+          payload: auditPayload,
+          plan: syntheticPlan,
+        },
+        responseJson: {
+          plan: syntheticPlan,
+          data: pending.data,
+        },
+      });
+
+      return {
+        matched: true,
+        intent: pending.intent,
+        actor,
+        responseText: pending.responseText,
+        plan: syntheticPlan,
+        data: pending.data,
+      };
+    }
+
+    const responseText =
+      "I could not map that request to a supported Aya action yet.";
+    await recordAudit({
+      actor,
+      transport,
+      inboundText: payload.message,
+      adapter: "planner",
+      outcome: "unmatched",
+      responseText,
+      requestJson: {
+        payload: auditPayload,
+        plan: null,
+      },
+      responseJson: {
+        matched: false,
+      },
+    });
+
+    return {
+      matched: false,
+      actor,
+      responseText,
+    };
+  }
+
+  if (plan.requiresClarification) {
+    const responseText =
+      plan.clarificationQuestion ?? "I need one quick clarification first.";
+    await recordAudit({
+      actor,
+      transport,
+      inboundText: payload.message,
+      detectedIntent: plan.intent,
+      adapter: "planner",
+      commandName: getAuditCommandName(plan.intent),
+      commandArgs: JSON.stringify(plan.parameters),
+      outcome: "needs_clarification",
+      responseText,
+      requestJson: {
+        payload: auditPayload,
+        plan,
+      },
+      responseJson: {
+        clarificationRequired: true,
+      },
+    });
+
+    return {
+      matched: true,
+      intent: plan.intent,
+      actor,
+      responseText,
+      clarificationRequired: true,
+      plan,
+    };
+  }
+
+  enforceIntentPermissions(actor, plan);
+  const execution = await executePlan({
+    actor,
+    transport,
+    blueAuth,
+    payload,
+    plan,
+  });
+
+  await recordAudit({
+    actor,
+    transport,
+    inboundText: payload.message,
+    detectedIntent: plan.intent,
+    adapter: getAuditAdapter(plan.intent),
+    commandName: getAuditCommandName(plan.intent),
+    commandArgs: JSON.stringify(plan.parameters),
+    outcome: "success",
+    responseText: execution.responseText,
+    requestJson: {
+      payload: auditPayload,
+      plan,
+    },
+    responseJson: {
+      plan,
+      data: execution.data,
+    },
+  });
+
+  return {
+    matched: true,
+    intent: plan.intent,
+    actor,
+    responseText: execution.responseText,
+    plan,
+    data: execution.data,
+  };
+}
+
+function enforceIntentPermissions(actor: EmployeeIdentity, plan: IntentPlan) {
+  const role = actor.roleName ?? "employee";
+
+  if (role === "admin") {
+    return;
+  }
+
+  if (
+    plan.intent === "summary.team_day" ||
+    plan.intent === "summary.no_activity_day" ||
+    plan.intent === "reporting.overview" ||
+    plan.intent === "reporting.question" ||
+    plan.intent === "activity.list"
+  ) {
+    throw new PermissionError();
+  }
+
+  if (
+    plan.intent === "records.list_assigned" &&
+    typeof plan.parameters.employeeName === "string" &&
+    plan.parameters.employeeName.trim().toLowerCase() !==
+      actor.displayName.trim().toLowerCase()
+  ) {
+    throw new PermissionError();
+  }
+
+  if (
+    plan.intent === "summary.employee_day" &&
+    typeof plan.parameters.employeeName === "string" &&
+    plan.parameters.employeeName.trim().toLowerCase() !==
+      actor.displayName.trim().toLowerCase()
+  ) {
+    throw new PermissionError();
+  }
+}
+
+async function executePlan(input: {
+  actor: EmployeeIdentity;
+  transport: string;
+  blueAuth: BlueRequestAuth | null;
+  payload: InboundMessagePayload;
+  plan: IntentPlan;
+}) {
+  const { actor, transport, blueAuth, plan } = input;
+
+  switch (plan.intent) {
+    case "identity.self": {
+      const data = {
+        employeeId: actor.employeeId,
+        displayName: actor.displayName,
+        email: actor.email ?? null,
+        roleName: actor.roleName ?? null,
+      };
+      return {
+        responseText: [
+          `You are signed in as ${actor.displayName}.`,
+          actor.email ? `Email: ${actor.email}` : null,
+          actor.roleName ? `Role: ${actor.roleName}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        data,
+      };
+    }
+
+    case "summary.employee_day": {
+      const result = await getEmployeeDaySummary({
+        employeeId:
+          typeof plan.parameters.employeeId === "string"
+            ? plan.parameters.employeeId
+            : undefined,
+        employeeName:
+          typeof plan.parameters.employeeName === "string"
+            ? plan.parameters.employeeName
+            : actor.displayName,
+        transport,
+      });
+      return {
+        responseText: result.summaryText,
+        data: result,
+      };
+    }
+
+    case "summary.team_day": {
+      const result = await getTeamDaySummary({});
+      return {
+        responseText: result.summaryText,
+        data: result,
+      };
+    }
+
+    case "summary.no_activity_day": {
+      const result = await getTeamDaySummary({ inactiveOnly: true });
+      return {
+        responseText: result.summaryText,
+        data: result,
+      };
+    }
+
+    case "records.search": {
+      const query = String(plan.parameters.query ?? "").trim();
+      const result = await searchClients({
+        query,
+        limit: 5,
+        actor,
+        transport,
+      });
+      const responseText =
+        result.items.length === 0
+          ? `No cached Blue records matched "${query}".`
+          : result.items
+              .map(
+                (item, index) =>
+                  `${index + 1}. ${item.title} (${item.listTitle})`,
+              )
+              .join("\n");
+      return {
+        responseText,
+        data: result,
+      };
+    }
+
+    case "records.detail": {
+      const result = await getClientDetail({
+        recordQuery:
+          typeof plan.parameters.recordQuery === "string"
+            ? plan.parameters.recordQuery
+            : undefined,
+        useActiveRecordContext: plan.parameters.useActiveRecordContext === true,
+        detailMode:
+          plan.parameters.detailMode === "call_prep"
+            ? "call_prep"
+            : plan.parameters.detailMode === "briefing"
+              ? "briefing"
+              : "default",
+        briefingFocus:
+          plan.parameters.briefingFocus === "handoff" ||
+          plan.parameters.briefingFocus === "blockers" ||
+          plan.parameters.briefingFocus === "missing_docs" ||
+          plan.parameters.briefingFocus === "general"
+            ? plan.parameters.briefingFocus
+            : undefined,
+        actor,
+        transport,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "records.list_assigned": {
+      const result = await getEmployeeWorkload({
+        employeeId:
+          typeof plan.parameters.assigneeId === "string"
+            ? plan.parameters.assigneeId
+            : undefined,
+        employeeName:
+          typeof plan.parameters.employeeName === "string"
+            ? plan.parameters.employeeName
+            : actor.displayName,
+        transport,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "records.follow_up": {
+      const result = await getEmployeeFollowUpQueue({
+        employeeId:
+          typeof plan.parameters.assigneeId === "string"
+            ? plan.parameters.assigneeId
+            : undefined,
+        employeeName:
+          typeof plan.parameters.employeeName === "string"
+            ? plan.parameters.employeeName
+            : actor.displayName,
+        transport,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "reporting.overview": {
+      const result = await getReportingOverview({ auth: blueAuth });
+      return {
+        responseText: result.summaryText,
+        data: result,
+      };
+    }
+
+    case "reporting.question": {
+      const question = String(plan.parameters.question ?? "").trim();
+      const result = await answerReportingQuestion({
+        question,
+        auth: blueAuth,
+      });
+      return {
+        responseText: result.answerText,
+        data: result,
+      };
+    }
+
+    case "comments.list_recent": {
+      const result = await getClientComments({
+        recordQuery:
+          typeof plan.parameters.recordQuery === "string"
+            ? plan.parameters.recordQuery
+            : undefined,
+        useActiveRecordContext: plan.parameters.useActiveRecordContext === true,
+        actor,
+        transport,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "comments.create": {
+      const result = await addCommentToClient({
+        recordQuery:
+          typeof plan.parameters.recordQuery === "string"
+            ? plan.parameters.recordQuery
+            : undefined,
+        useActiveRecordContext: plan.parameters.useActiveRecordContext === true,
+        text: String(plan.parameters.text ?? ""),
+        actor,
+        blueAuth,
+        transport,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "records.move": {
+      const result = await moveClientToStage({
+        recordQuery:
+          typeof plan.parameters.recordQuery === "string"
+            ? plan.parameters.recordQuery
+            : undefined,
+        targetListQuery: String(plan.parameters.targetListQuery ?? ""),
+        useActiveRecordContext: plan.parameters.useActiveRecordContext === true,
+        actor,
+        blueAuth,
+        transport,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "records.create": {
+      const financeAmountRaw =
+        typeof plan.parameters.financeAmount === "string"
+          ? plan.parameters.financeAmount
+          : undefined;
+      const financeAmount = financeAmountRaw ? Number(financeAmountRaw) : undefined;
+      const result = await createClientRecord({
+        fullName:
+          typeof plan.parameters.fullName === "string"
+            ? plan.parameters.fullName
+            : undefined,
+        firstName:
+          typeof plan.parameters.firstName === "string"
+            ? plan.parameters.firstName
+            : undefined,
+        lastName:
+          typeof plan.parameters.lastName === "string"
+            ? plan.parameters.lastName
+            : undefined,
+        email:
+          typeof plan.parameters.email === "string"
+            ? plan.parameters.email
+            : undefined,
+        phone:
+          typeof plan.parameters.phone === "string"
+            ? plan.parameters.phone
+            : undefined,
+        financeAmount,
+        notes:
+          typeof plan.parameters.notes === "string"
+            ? plan.parameters.notes
+            : undefined,
+        targetListQuery:
+          typeof plan.parameters.targetListQuery === "string"
+            ? plan.parameters.targetListQuery
+            : undefined,
+        actor,
+        blueAuth,
+        transport,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "activity.list":
+      return {
+        responseText:
+          "Aya has not enabled a standalone activity feed here yet. Ask for what changed today or what someone did today.",
+        data: null,
+      };
+  }
+}
+
+async function continuePendingRecordChoice(
+  actor: EmployeeIdentity,
+  transport: string,
+  message: string,
+  blueAuth: BlueRequestAuth | null,
+): Promise<PendingExecutionResult | null> {
+  const pendingSelection = await resolvePendingRecordChoice({
+    actor,
+    transport,
+    message,
+  });
+  if (!pendingSelection) {
+    return null;
+  }
+
+  await clearPendingRecordChoiceForActor(actor);
+
+  switch (pendingSelection.context.continuationAction) {
+    case "get_client_detail":
+    case "records.detail": {
+      const result = await getClientDetail({
+        recordId: pendingSelection.candidate.id,
+        detailMode:
+          pendingSelection.context.pendingParameters.detailMode === "call_prep"
+            ? "call_prep"
+            : pendingSelection.context.pendingParameters.detailMode === "briefing"
+              ? "briefing"
+              : "default",
+        briefingFocus:
+          pendingSelection.context.pendingParameters.briefingFocus ===
+            "handoff" ||
+          pendingSelection.context.pendingParameters.briefingFocus ===
+            "blockers" ||
+          pendingSelection.context.pendingParameters.briefingFocus ===
+            "missing_docs" ||
+          pendingSelection.context.pendingParameters.briefingFocus === "general"
+            ? pendingSelection.context.pendingParameters.briefingFocus
+            : undefined,
+        actor,
+        transport,
+      });
+      return {
+        intent: "records.detail",
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "comments.list_recent": {
+      const result = await getClientComments({
+        recordId: pendingSelection.candidate.id,
+        actor,
+        transport,
+      });
+      return {
+        intent: "comments.list_recent",
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "comments.create": {
+      const text =
+        typeof pendingSelection.context.pendingParameters.text === "string"
+          ? pendingSelection.context.pendingParameters.text
+          : "";
+      const result = await addCommentToClient({
+        recordId: pendingSelection.candidate.id,
+        text,
+        actor,
+        blueAuth,
+        transport,
+      });
+      return {
+        intent: "comments.create",
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "records.move": {
+      const targetListQuery =
+        typeof pendingSelection.context.pendingParameters.targetListQuery ===
+        "string"
+          ? pendingSelection.context.pendingParameters.targetListQuery
+          : "";
+      const result = await moveClientToStage({
+        recordId: pendingSelection.candidate.id,
+        targetListQuery,
+        actor,
+        blueAuth,
+        transport,
+      });
+      return {
+        intent: "records.move",
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    default:
+      return null;
+  }
+}
+
+async function recordAudit(input: {
+  actor: EmployeeIdentity;
+  transport: string;
+  inboundText: string;
+  detectedIntent?: string;
+  adapter: string;
+  outcome: string;
+  responseText: string;
+  commandName?: string;
+  commandArgs?: string;
+  requestJson?: unknown;
+  responseJson?: unknown;
+}) {
+  await insertBotAuditLog({
+    id: createId("audit"),
+    employeeId: input.actor.blueUserId,
+    transport: input.transport,
+    inboundText: input.inboundText,
+    detectedIntent: input.detectedIntent,
+    adapter: input.adapter,
+    commandName: input.commandName,
+    commandArgs: input.commandArgs,
+    outcome: input.outcome,
+    responseText: input.responseText,
+    requestJson: input.requestJson,
+    responseJson: input.responseJson,
+  });
+}
+
+function getAuditAdapter(intent: IntentName) {
+  switch (intent) {
+    case "identity.self":
+    case "summary.employee_day":
+    case "summary.team_day":
+    case "summary.no_activity_day":
+      return "local";
+    case "records.search":
+      return "local-cache";
+    case "reporting.overview":
+    case "reporting.question":
+      return "blue-reporting";
+    default:
+      return "aya-service";
+  }
+}
+
+function getAuditCommandName(intent: IntentName) {
+  switch (intent) {
+    case "records.move":
+      return "moveTodo";
+    case "records.create":
+      return "createTodo";
+    case "comments.create":
+      return "createComment";
+    case "comments.list_recent":
+    case "records.detail":
+      return "getBlueRecordDetail";
+    case "records.list_assigned":
+    case "records.follow_up":
+      return "todoQueries.todos";
+    case "reporting.overview":
+      return "getReportingOverview";
+    case "reporting.question":
+      return "answerReportingQuestion";
+    default:
+      return intent;
+  }
+}

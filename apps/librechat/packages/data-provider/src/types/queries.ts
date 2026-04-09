@@ -174,6 +174,7 @@ export type AccessRolesResponse = AccessRole[];
 
 export interface MCPServerStatus {
   requiresOAuth: boolean;
+  inspectionFailed?: boolean;
   connectionState: 'disconnected' | 'connecting' | 'connected' | 'error';
 }
 

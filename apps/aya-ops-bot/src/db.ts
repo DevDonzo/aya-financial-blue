@@ -1,5 +1,6 @@
 import { db, createId, initializeDatabase } from "./modules/db/kysely.js";
 import * as activityRepo from "./modules/db/repositories/activity.js";
+import * as activeRecordContextRepo from "./modules/db/repositories/active-record-context.js";
 import * as auditRepo from "./modules/db/repositories/audit.js";
 import * as authRepo from "./modules/db/repositories/auth.js";
 import * as blueCacheRepo from "./modules/db/repositories/blue-cache.js";
@@ -32,6 +33,11 @@ export const deleteIdentityLinkById = identityRepo.deleteIdentityLinkById;
 export const upsertPendingRecordChoice = pendingRecordChoiceRepo.upsertPendingRecordChoice;
 export const getPendingRecordChoice = pendingRecordChoiceRepo.getPendingRecordChoice;
 export const deletePendingRecordChoice = pendingRecordChoiceRepo.deletePendingRecordChoice;
+export const upsertActiveRecordContext =
+  activeRecordContextRepo.upsertActiveRecordContext;
+export const getActiveRecordContext = activeRecordContextRepo.getActiveRecordContext;
+export const deleteActiveRecordContext =
+  activeRecordContextRepo.deleteActiveRecordContext;
 
 export const replaceBlueListsCache = blueCacheRepo.replaceBlueListsCache;
 export const replaceBlueRecordsCache = blueCacheRepo.replaceBlueRecordsCache;

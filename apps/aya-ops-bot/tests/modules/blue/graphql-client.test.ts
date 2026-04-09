@@ -41,11 +41,36 @@ const server = setupServer(
             id: "comment_1",
             uid: "comment_uid_1",
             text: body.variables.input && (body.variables.input as { text: string }).text,
-            html: "<p>Hello</p>",
+          html: "<p>Hello</p>",
             createdAt: "2026-03-25T00:00:00.000Z",
             updatedAt: "2026-03-25T00:00:00.000Z",
             deletedAt: null,
             user: null,
+          },
+        },
+      });
+    }
+
+    if (body.query.includes("query WorkspaceUsers")) {
+      return HttpResponse.json({
+        data: {
+          projectUserList: {
+            users: [
+              {
+                id: "emp_sarah",
+                uid: "emp_uid_sarah",
+                email: "sarah.khan@ayafinancial.com",
+                firstName: "Sarah",
+                lastName: "Khan",
+                fullName: "Sarah Khan",
+                timezone: "America/Toronto",
+                updatedAt: "2026-03-25T00:00:00.000Z",
+              },
+            ],
+            totalCount: 1,
+            pageInfo: {
+              hasNextPage: false,
+            },
           },
         },
       });
@@ -287,6 +312,31 @@ describe("blue graphql client mutations and workload query", () => {
     }
   });
 
+  it("uses request-scoped Blue credentials for workspace reads", async () => {
+    const env = createTestEnvironment();
+    try {
+      const { fetchWorkspaceLists } = await import(
+        "../../../src/modules/blue/graphql/client.js"
+      );
+      await fetchWorkspaceLists({
+        workspaceId: "cmn524yr800e101mh7kn44mhf",
+        auth: {
+          tokenId: "user-token-id",
+          tokenSecret: "user-token-secret",
+        },
+      });
+
+      expect(requests[0]?.headers).toEqual({
+        tokenId: "user-token-id",
+        tokenSecret: "user-token-secret",
+        companyId: "test-company",
+        projectId: "cmn524yr800e101mh7kn44mhf",
+      });
+    } finally {
+      env.cleanup();
+    }
+  });
+
   it("creates a comment through createComment", async () => {
     const env = createTestEnvironment();
     try {
@@ -294,17 +344,18 @@ describe("blue graphql client mutations and workload query", () => {
       const result = await createComment({
         workspaceId: "cmn524yr800e101mh7kn44mhf",
         recordId: "todo_123",
-        text: "Hello",
+        text: "@Sarah Khan follow up",
       });
 
       expect(result.id).toBe("comment_1");
-      expect(requests[0]?.variables).toEqual({
+      expect(requests[1]?.variables).toEqual({
         input: {
-          html: "<p>Hello</p>",
-          text: "Hello",
+          html:
+          '<p><span class="mention" data-type="mention" contenteditable="false" data-mention="emp_sarah" data-id="emp_sarah" data-label="Sarah Khan">@Sarah Khan</span> follow up</p>',
+          text: "@Sarah Khan follow up",
           category: "TODO",
           categoryId: "todo_123",
-          tiptap: false,
+          tiptap: true,
         },
       });
     } finally {

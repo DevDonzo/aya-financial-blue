@@ -1,9 +1,31 @@
 const { logger } = require('@librechat/data-schemas');
 const { CacheKeys, Constants } = require('librechat-data-provider');
 const { getMCPManager, getMCPServersRegistry, getFlowStateManager } = require('~/config');
-const { findToken, createToken, updateToken, deleteTokens } = require('~/models');
+const { findToken, createToken, updateToken, deleteTokens, getUserById } = require('~/models');
 const { updateMCPServerTools } = require('~/server/services/Config');
 const { getLogStores } = require('~/cache');
+
+async function withLibreChatIdentityVars(customUserVars, user) {
+  let resolvedUser = user;
+  if (resolvedUser?.id && (!resolvedUser.email || !resolvedUser.name)) {
+    try {
+      const hydratedUser = await getUserById(resolvedUser.id);
+      if (hydratedUser) {
+        hydratedUser.id = hydratedUser._id?.toString?.() ?? hydratedUser.id;
+        resolvedUser = hydratedUser;
+      }
+    } catch (error) {
+      logger.warn('[MCP Reinitialize] Failed to hydrate user identity vars from DB', error);
+    }
+  }
+
+  return {
+    ...(customUserVars ?? {}),
+    ...(resolvedUser?.email ? { LIBRECHAT_USER_EMAIL: resolvedUser.email } : {}),
+    ...(resolvedUser?.name ? { LIBRECHAT_USER_NAME: resolvedUser.name } : {}),
+    ...(resolvedUser?.id ? { LIBRECHAT_USER_ID: resolvedUser.id } : {}),
+  };
+}
 
 /**
  * Reinitializes an MCP server connection and discovers available tools.
@@ -68,7 +90,10 @@ async function reinitMCPServer({
       }
     }
 
-    const customUserVars = userMCPAuthMap?.[`${Constants.mcp_prefix}${serverName}`];
+    const customUserVars = await withLibreChatIdentityVars(
+      userMCPAuthMap?.[`${Constants.mcp_prefix}${serverName}`],
+      user,
+    );
     const flowManager = _flowManager ?? getFlowStateManager(getLogStores(CacheKeys.FLOWS));
     const mcpManager = getMCPManager();
     const tokenMethods = { findToken, updateToken, createToken, deleteTokens };

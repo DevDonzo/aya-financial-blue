@@ -25,8 +25,15 @@ const TermsAndConditionsModal = ({
   const { showToast } = useToastContext();
   const acceptTermsMutation = useAcceptTermsMutation({
     onSuccess: () => {
-      onAccept();
       onOpenChange(false);
+      const notifyAccepted = () => onAccept();
+
+      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(notifyAccepted);
+        return;
+      }
+
+      setTimeout(notifyAccepted, 0);
     },
     onError: () => {
       showToast({ message: 'Failed to accept terms' });

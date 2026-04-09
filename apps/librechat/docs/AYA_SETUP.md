@@ -19,8 +19,8 @@ LibreChat's model layer should extract structure from that language and call Aya
 ## Current Local Shape
 
 - LibreChat runs on `http://localhost:3080`
-- Aya runs on `http://host.docker.internal:3010`
-- LibreChat connects to Aya over MCP at `http://host.docker.internal:3010/mcp`
+- Aya runs as an explicit `aya-api` service in the local Docker stack and is also exposed on `http://localhost:3010`
+- LibreChat connects to Aya over MCP at `http://aya-api:3010/mcp` inside Docker
 - LibreChat passes the signed-in user's identity to Aya via:
   - `x-aya-employee-email: {{LIBRECHAT_USER_EMAIL}}`
   - `x-aya-employee-name: {{LIBRECHAT_USER_NAME}}`
@@ -95,6 +95,11 @@ Then open:
 ```text
 http://localhost:3080
 ```
+
+The Docker app should show both of the application surfaces explicitly:
+
+- `LibreChat`
+- `aya-api`
 
 ## Enterprise Files
 

@@ -30,6 +30,16 @@ describe("blue request auth helpers", () => {
           tokenSecret: "{{AYA_BLUE_TOKEN_SECRET}}",
         }),
       ).toBeNull();
+
+      expect(
+        normalizeBlueRequestAuth({
+          tokenId: "1234567890abcdef1234567890abcdeg",
+          tokenSecret: "1234567890abcdef1234567890abcdef",
+        }),
+      ).toEqual({
+        tokenId: "1234567890abcdef1234567890abcdef",
+        tokenSecret: "1234567890abcdef1234567890abcdeg",
+      });
     } finally {
       env.cleanup();
     }

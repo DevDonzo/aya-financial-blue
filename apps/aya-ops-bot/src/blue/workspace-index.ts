@@ -16,6 +16,7 @@ import {
   fetchWorkspaceListRecords,
   fetchWorkspaceLists,
 } from "../modules/blue/graphql/client.js";
+import type { BlueRequestAuth } from "../domain/types.js";
 
 interface ParsedBlueList {
   id: string;
@@ -46,7 +47,10 @@ interface ParsedBlueRecord {
   rawJson?: string | null;
 }
 
-export async function syncWorkspaceIndex(input?: { forceFull?: boolean }) {
+export async function syncWorkspaceIndex(input?: {
+  forceFull?: boolean;
+  auth?: BlueRequestAuth | null;
+}) {
   const workspaceId = config.BLUE_WORKSPACE_ID;
   const state = await getBlueSyncState(workspaceId, "records");
   const nowIso = new Date().toISOString();
@@ -65,6 +69,7 @@ export async function syncWorkspaceIndex(input?: { forceFull?: boolean }) {
   const lists = await fetchWorkspaceLists({
     workspaceId,
     updatedAfter: shouldFullSync ? null : safetyWindowIso,
+    auth: input?.auth,
   });
   const parsedLists = lists.map<ParsedBlueList>((list) => ({
     id: list.id,
@@ -82,6 +87,7 @@ export async function syncWorkspaceIndex(input?: { forceFull?: boolean }) {
       workspaceId,
       listId: list.id,
       updatedAfter: shouldFullSync ? null : safetyWindowIso,
+      auth: input?.auth,
     });
 
     for (const record of records) {

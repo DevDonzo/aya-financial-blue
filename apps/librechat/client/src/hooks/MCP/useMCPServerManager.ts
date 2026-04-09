@@ -18,8 +18,19 @@ import {
 } from 'librechat-data-provider/react-query';
 import type { TUpdateUserPlugins, TPlugin, MCPServersResponse } from 'librechat-data-provider';
 import type { ConfigFieldDetail } from '~/common';
-import { useLocalize, useHasAccess, useMCPSelect, useMCPConnectionStatus } from '~/hooks';
-import { useGetStartupConfig, useMCPServersQuery, useMCPToolsQuery } from '~/data-provider';
+import {
+  useAuthContext,
+  useLocalize,
+  useHasAccess,
+  useMCPSelect,
+  useMCPConnectionStatus,
+} from '~/hooks';
+import {
+  useGetStartupConfig,
+  useMCPServersQuery,
+  useMCPToolsQuery,
+  useUserTermsQuery,
+} from '~/data-provider';
 import { mcpServerInitStatesAtom, getServerInitState } from '~/store/mcp';
 import type { MCPServerInitState } from '~/store/mcp';
 
@@ -38,15 +49,25 @@ type PollIntervals = Record<string, NodeJS.Timeout | null>;
 export function useMCPServerManager({
   conversationId,
   storageContextKey,
-}: { conversationId?: string | null; storageContextKey?: string } = {}) {
+  autoPromptMissingAuth = false,
+}: {
+  conversationId?: string | null;
+  storageContextKey?: string;
+  autoPromptMissingAuth?: boolean;
+} = {}) {
   const localize = useLocalize();
   const queryClient = useQueryClient();
   const { showToast } = useToastContext();
   /** Retained for `interface.mcpServers.placeholder` used by `placeholderText` below */
-  const { data: startupConfig } = useGetStartupConfig();
+  const { isAuthenticated } = useAuthContext();
+  const { data: startupConfig, isFetched: isStartupConfigFetched } = useGetStartupConfig();
   const canUseMcp = useHasAccess({
     permissionType: PermissionTypes.MCP_SERVERS,
     permission: Permissions.USE,
+  });
+  const requiresTermsAcceptance = startupConfig?.interface?.termsOfService?.modalAcceptance === true;
+  const { data: termsData, isFetched: isTermsFetched } = useUserTermsQuery({
+    enabled: isAuthenticated && requiresTermsAcceptance,
   });
 
   const { data: loadedServers, isLoading } = useMCPServersQuery({ enabled: canUseMcp });
@@ -63,6 +84,8 @@ export function useMCPServerManager({
   const [selectedToolForConfig, setSelectedToolForConfig] = useState<TPlugin | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const hasAutoPromptedRef = useRef(false);
+  const hadPendingTermsRef = useRef(false);
+  const [termsAcceptedSignal, setTermsAcceptedSignal] = useState(0);
 
   const availableMCPServers: MCPServerDefinition[] = useMemo<MCPServerDefinition[]>(() => {
     const definitions: MCPServerDefinition[] = [];
@@ -97,6 +120,28 @@ export function useMCPServerManager({
     storageContextKey,
     servers: selectableServers,
   });
+
+  useEffect(() => {
+    if (requiresTermsAcceptance && termsData?.termsAccepted === false) {
+      hadPendingTermsRef.current = true;
+    }
+  }, [requiresTermsAcceptance, termsData?.termsAccepted]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !autoPromptMissingAuth) {
+      return;
+    }
+
+    const handleTermsAccepted = () => {
+      setTermsAcceptedSignal((current) => current + 1);
+    };
+
+    window.addEventListener('librechat:terms-accepted', handleTermsAccepted);
+
+    return () => {
+      window.removeEventListener('librechat:terms-accepted', handleTermsAccepted);
+    };
+  }, [autoPromptMissingAuth]);
   const mcpValuesRef = useRef(mcpValues);
 
   // fixes the issue where OAuth flows would deselect all the servers except the one that is being authenticated on success
@@ -569,8 +614,22 @@ export function useMCPServerManager({
     [loadedServers, queryClient],
   );
 
+  const hasResolvedTermsAcceptance = termsData?.termsAccepted === true || termsAcceptedSignal > 0;
+  const isWaitingForTermsResolution =
+    !isStartupConfigFetched ||
+    (requiresTermsAcceptance && (!isTermsFetched || !hasResolvedTermsAcceptance));
+  const isWaitingForTermsModalClosure =
+    requiresTermsAcceptance && hadPendingTermsRef.current && termsAcceptedSignal === 0;
+
   useEffect(() => {
-    if (typeof window === 'undefined' || isConfigModalOpen || hasAutoPromptedRef.current) {
+    if (
+      typeof window === 'undefined' ||
+      !autoPromptMissingAuth ||
+      isConfigModalOpen ||
+      hasAutoPromptedRef.current ||
+      isWaitingForTermsResolution ||
+      isWaitingForTermsModalClosure
+    ) {
       return;
     }
 
@@ -594,7 +653,15 @@ export function useMCPServerManager({
 
     hasAutoPromptedRef.current = true;
     openConfigDialogForServer(targetServerName);
-  }, [isConfigModalOpen, loadedServers, mcpToolsData, openConfigDialogForServer]);
+  }, [
+    autoPromptMissingAuth,
+    isConfigModalOpen,
+    isWaitingForTermsModalClosure,
+    isWaitingForTermsResolution,
+    loadedServers,
+    mcpToolsData,
+    openConfigDialogForServer,
+  ]);
 
   const getServerStatusIconProps = useCallback(
     (serverName: string) => {

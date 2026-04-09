@@ -52,6 +52,9 @@ export default function Root() {
 
   const handleAcceptTerms = () => {
     setShowTerms(false);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('librechat:terms-accepted'));
+    }
   };
 
   const handleDeclineTerms = () => {

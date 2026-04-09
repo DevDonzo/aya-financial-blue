@@ -148,6 +148,17 @@ export interface PendingRecordChoicesTable {
   updated_at: Generated<string>;
 }
 
+export interface ActiveRecordContextTable {
+  employee_id: string;
+  transport: string;
+  record_id: string;
+  record_title: string;
+  list_title: string | null;
+  expires_at: string;
+  created_at: Generated<string>;
+  updated_at: Generated<string>;
+}
+
 export interface AyaDatabase {
   employees: EmployeesTable;
   identity_links: IdentityLinksTable;
@@ -161,4 +172,5 @@ export interface AyaDatabase {
   blue_sync_state: BlueSyncStateTable;
   blue_webhook_subscriptions: BlueWebhookSubscriptionsTable;
   pending_record_choices: PendingRecordChoicesTable;
+  active_record_context: ActiveRecordContextTable;
 }

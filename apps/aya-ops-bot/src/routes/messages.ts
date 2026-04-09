@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from "fastify";
 import {
   handleInboundMessage,
   type InboundMessagePayload,
+  planInboundMessage,
 } from "../messages/handle-message.js";
 import { messageBodySchema } from "../types/api.js";
 import { parseWithSchema } from "../app/plugins/zod.js";
@@ -19,6 +20,20 @@ export const messageRoutes: FastifyPluginAsync = async (app) => {
     );
     return await handleInboundMessage(payload);
   });
+
+  app.post(
+    "/messages/plan",
+    { preHandler: [app.authenticateOptionalSession] },
+    async (request) => {
+      const payload = applyHeadersToPayload(
+        parseWithSchema(messageBodySchema, request.body),
+        request.headers,
+        request.employee,
+        "/messages/plan",
+      );
+      return await planInboundMessage(payload);
+    },
+  );
 
   app.post(
     "/messages",

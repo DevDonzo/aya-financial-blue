@@ -22,7 +22,7 @@ const {
   getFlowStateManager,
   getMCPManager,
 } = require('~/config');
-const { findToken, createToken, updateToken } = require('~/models');
+const { findToken, createToken, updateToken, getUserById } = require('~/models');
 const { getGraphApiToken } = require('./GraphTokenService');
 const { reinitMCPServer } = require('./Tools/mcp');
 const { getAppConfig } = require('./Config');
@@ -52,6 +52,28 @@ function evictStale(map, ttl) {
 
 const unavailableMsg =
   "This tool's MCP server is temporarily unavailable. Please try again shortly.";
+
+async function withLibreChatIdentityVars(customUserVars, user) {
+  let resolvedUser = user;
+  if (resolvedUser?.id && (!resolvedUser.email || !resolvedUser.name)) {
+    try {
+      const hydratedUser = await getUserById(resolvedUser.id);
+      if (hydratedUser) {
+        hydratedUser.id = hydratedUser._id?.toString?.() ?? hydratedUser.id;
+        resolvedUser = hydratedUser;
+      }
+    } catch (error) {
+      logger.warn('[MCP] Failed to hydrate user identity vars from DB', error);
+    }
+  }
+
+  return {
+    ...(customUserVars ?? {}),
+    ...(resolvedUser?.email ? { LIBRECHAT_USER_EMAIL: resolvedUser.email } : {}),
+    ...(resolvedUser?.name ? { LIBRECHAT_USER_NAME: resolvedUser.name } : {}),
+    ...(resolvedUser?.id ? { LIBRECHAT_USER_ID: resolvedUser.id } : {}),
+  };
+}
 
 /**
  * @param {string} toolName
@@ -571,8 +593,10 @@ function createToolInstance({
         derivedSignal.addEventListener('abort', abortHandler, { once: true });
       }
 
-      const customUserVars =
-        config?.configurable?.userMCPAuthMap?.[`${Constants.mcp_prefix}${serverName}`];
+      const customUserVars = await withLibreChatIdentityVars(
+        config?.configurable?.userMCPAuthMap?.[`${Constants.mcp_prefix}${serverName}`],
+        config?.configurable?.user,
+      );
 
       const result = await mcpManager.callTool({
         serverName,
@@ -780,6 +804,7 @@ async function getServerConnectionStatus(
 
   return {
     requiresOAuth: oauthServers.has(serverName),
+    inspectionFailed: Boolean(config?.inspectionFailed),
     connectionState: finalConnectionState,
   };
 }

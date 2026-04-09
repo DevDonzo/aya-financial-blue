@@ -1327,10 +1327,12 @@ describe('MCP Routes', () => {
         .mockResolvedValueOnce({
           connectionState: 'connected',
           requiresOAuth: false,
+          inspectionFailed: false,
         })
         .mockResolvedValueOnce({
           connectionState: 'disconnected',
           requiresOAuth: true,
+          inspectionFailed: false,
         });
 
       const response = await request(app).get('/api/mcp/connection/status');
@@ -1342,10 +1344,12 @@ describe('MCP Routes', () => {
           server1: {
             connectionState: 'connected',
             requiresOAuth: false,
+            inspectionFailed: false,
           },
           server2: {
             connectionState: 'disconnected',
             requiresOAuth: true,
+            inspectionFailed: false,
           },
         },
       });

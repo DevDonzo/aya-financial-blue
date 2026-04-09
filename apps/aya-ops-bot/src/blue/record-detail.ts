@@ -8,6 +8,41 @@ interface DetailField {
   value: string;
 }
 
+export interface BlueRecordDetail {
+  id: string;
+  title: string;
+  list: string;
+  status: string;
+  description: string;
+  startedAt: string | null;
+  dueAt: string | null;
+  commentsCount: number;
+  createdAt: string | null;
+  updatedAt: string | null;
+  customFields: DetailField[];
+  contact: {
+    firstName: string;
+    lastName: string;
+    phone: string;
+    email: string;
+    uniqueId: string;
+  };
+  assignees: Array<{
+    id: string;
+    name: string;
+    email: string;
+  }>;
+  tags: string[];
+  recentActivity: Array<{
+    id: string;
+    category: string;
+    occurredAt: string;
+    actor: string;
+    commentText: string | null;
+    summary: string;
+  }>;
+}
+
 export async function getBlueRecordDetail(recordId: string) {
   const { record, comments } = await fetchRecordDetail(
     config.BLUE_WORKSPACE_ID,
@@ -35,6 +70,12 @@ export async function getBlueRecordDetail(recordId: string) {
   }));
 
   const contact = pickContactFields(customFields);
+  const assignees = (record.users ?? []).map((user) => ({
+    id: user.id,
+    name: formatActor(user),
+    email: user.email ?? "",
+  }));
+  const tags = (record.tags ?? []).map((tag) => tag.title).filter(Boolean);
 
   return {
     id: record.id,
@@ -49,8 +90,10 @@ export async function getBlueRecordDetail(recordId: string) {
     updatedAt: record.updatedAt ?? null,
     customFields,
     contact,
+    assignees,
+    tags,
     recentActivity,
-  };
+  } satisfies BlueRecordDetail;
 }
 
 function pickContactFields(fields: DetailField[]) {

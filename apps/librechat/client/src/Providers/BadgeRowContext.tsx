@@ -242,7 +242,11 @@ export default function BadgeRowProvider({
     isAuthenticated: true,
   });
 
-  const mcpServerManager = useMCPServerManager({ conversationId, storageContextKey });
+  const mcpServerManager = useMCPServerManager({
+    conversationId,
+    storageContextKey,
+    autoPromptMissingAuth: true,
+  });
 
   const value: BadgeRowContextType = {
     webSearch,

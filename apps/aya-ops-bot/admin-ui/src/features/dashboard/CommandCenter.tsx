@@ -75,6 +75,12 @@ type DashboardSyncItem = {
   timestamp: string | null;
 };
 
+type DashboardRoutingItem = {
+  intent: string;
+  count: number;
+  share: number;
+};
+
 export function CommandCenter(input: CommandCenterProps) {
   const model = buildCommandCenterModel(input);
 
@@ -101,6 +107,12 @@ export function CommandCenter(input: CommandCenterProps) {
           label="Team Throughput"
           value={model.throughput}
           note={`${model.successRate}% success rate`}
+        />
+        <MetricStack
+          label="Planner Quality"
+          value={`${model.routing.score}%`}
+          note={`${model.routing.clarificationRate}% clarification rate`}
+          tone={chipTone(model.routing.state)}
         />
         <MetricStack
           label="Active Crew"
@@ -315,24 +327,64 @@ export function CommandCenter(input: CommandCenterProps) {
         <section className="panel command-mix-panel">
           <div className="panel-head">
             <div>
-              <h2>Work Mix</h2>
+              <h2>Routing Watch</h2>
               <p className="muted">
-                What the team is actually doing right now across search, workflow, summaries, and notes.
+                Planner health, clarification pressure, and the intents Aya is routing most often.
               </p>
             </div>
           </div>
+          <div className="routing-metric-grid">
+            <StatLine
+              label="Average Confidence"
+              value={`${model.routing.averageConfidence}%`}
+              tone={chipTone(model.routing.state)}
+            />
+            <StatLine
+              label="Clarifications"
+              value={`${model.routing.clarificationRate}%`}
+              tone={
+                model.routing.clarificationRate <= 12
+                  ? "ok"
+                  : model.routing.clarificationRate <= 22
+                    ? "warn"
+                    : "bad"
+              }
+            />
+            <StatLine
+              label="Low Confidence"
+              value={String(model.routing.lowConfidenceCount)}
+              tone={model.routing.lowConfidenceCount === 0 ? "ok" : "warn"}
+            />
+            <StatLine
+              label="Context Follow-ups"
+              value={String(model.routing.activeRecordFollowUps)}
+              tone={model.routing.activeRecordFollowUps > 0 ? "ok" : "info"}
+            />
+          </div>
           <div className="mix-stack">
-            {model.workMix.map((item) => (
+            {model.routing.topIntents.map((item) => (
               <article key={item.label} className="mix-row">
                 <div className="mix-row-head">
                   <strong>{item.label}</strong>
                   <span>{item.count}</span>
                 </div>
                 <div className="contribution-bar-shell">
-                  <div className="contribution-bar steady" style={{ width: `${item.share}%` }} />
+                  <div
+                    className={`contribution-bar ${
+                      model.routing.state === "critical"
+                        ? "critical"
+                        : model.routing.state === "watch"
+                          ? "watch"
+                          : "steady"
+                    }`}
+                    style={{ width: `${item.share}%` }}
+                  />
                 </div>
               </article>
             ))}
+          </div>
+          <div className="routing-footnote">
+            Work mix still reflects real logs, but the routing panel shows whether Aya is classifying confidently enough to trust at scale.
           </div>
         </section>
 
@@ -514,8 +566,13 @@ function buildCommandCenterModel(input: CommandCenterProps) {
     100,
     Math.round((throughput / Math.max(1, totalEmployees * 6)) * 100),
   );
+  const routing = buildRoutingModel(input.overview, throughput);
   const readinessScore = Math.round(
-    successRate * 0.34 + coverageScore * 0.26 + syncScore * 0.2 + throughputScore * 0.2,
+    successRate * 0.28 +
+      coverageScore * 0.22 +
+      syncScore * 0.16 +
+      throughputScore * 0.14 +
+      routing.score * 0.2,
   );
   const readinessState =
     readinessScore >= 80 ? "steady" : readinessScore >= 62 ? "watch" : "critical";
@@ -549,9 +606,9 @@ function buildCommandCenterModel(input: CommandCenterProps) {
     employees,
     overview: input.overview,
     syncItems,
+    routing,
   });
 
-  const workMix = buildWorkMix(input.logs);
   const recentActivity = [...input.logs]
     .sort((left, right) => timestampMs(right.created_at) - timestampMs(left.created_at))
     .slice(0, 6)
@@ -602,7 +659,7 @@ function buildCommandCenterModel(input: CommandCenterProps) {
     employees,
     topContributors: employees.slice(0, 5),
     recentActivity,
-    workMix,
+    routing,
     syncItems,
   };
 }
@@ -611,6 +668,12 @@ function buildAlerts(input: {
   employees: DashboardEmployee[];
   overview: OverviewResponse["overview"] | null | undefined;
   syncItems: DashboardSyncItem[];
+  routing: {
+    clarificationRate: number;
+    lowConfidenceCount: number;
+    unmatchedRate: number;
+    state: "steady" | "watch" | "critical";
+  };
 }) {
   const alerts: DashboardAlert[] = [];
 
@@ -621,6 +684,16 @@ function buildAlerts(input: {
       title: "Failed actions require review",
       detail: `${input.overview?.failureCount ?? 0} Aya actions failed in the current reporting window.`,
       meta: "Review the failing prompts before they turn into silent workflow gaps.",
+    });
+  }
+
+  if (input.routing.state !== "steady") {
+    alerts.push({
+      id: "planner-health",
+      level: input.routing.state === "critical" ? "critical" : "watch",
+      title: "Planner quality needs attention",
+      detail: `${input.routing.clarificationRate}% clarification rate, ${input.routing.lowConfidenceCount} low-confidence plans, ${input.routing.unmatchedRate}% unmatched prompts.`,
+      meta: "This is the best early signal that Aya routing quality is slipping before employees lose trust.",
     });
   }
 
@@ -672,29 +745,6 @@ function buildAlerts(input: {
     .slice(0, 7);
 }
 
-function buildWorkMix(logs: LogRow[]): DashboardMixItem[] {
-  const buckets = new Map<string, number>();
-
-  for (const log of logs) {
-    const label = classifyLog(log);
-    buckets.set(label, (buckets.get(label) ?? 0) + 1);
-  }
-
-  const total = Math.max(
-    1,
-    [...buckets.values()].reduce((sum, count) => sum + count, 0),
-  );
-
-  return [...buckets.entries()]
-    .map(([label, count]) => ({
-      label,
-      count,
-      share: Math.round((count / total) * 100),
-    }))
-    .sort((left, right) => right.count - left.count)
-    .slice(0, 5);
-}
-
 function classifyLog(log: LogRow) {
   const text = `${log.detected_intent ?? ""} ${log.command_name ?? ""} ${log.inbound_text}`.toLowerCase();
 
@@ -728,6 +778,72 @@ function describeLog(log: LogRow) {
     : log.inbound_text;
 }
 
+function buildRoutingModel(
+  overview: OverviewResponse["overview"] | null | undefined,
+  throughput: number,
+) {
+  const planner = overview?.planner ?? {
+    plannedCount: 0,
+    averageConfidence: 0,
+    clarificationCount: 0,
+    unmatchedCount: 0,
+    lowConfidenceCount: 0,
+    activeRecordFollowUps: 0,
+    topIntents: [],
+  };
+  const averageConfidence = Math.round((planner.averageConfidence ?? 0) * 100);
+  const clarificationRate = percentage(
+    planner.clarificationCount,
+    Math.max(1, planner.plannedCount),
+  );
+  const unmatchedRate = percentage(
+    planner.unmatchedCount,
+    Math.max(1, throughput),
+  );
+  const routingScore = clamp(
+    Math.round(
+      averageConfidence * 0.7 +
+        Math.max(0, 100 - clarificationRate * 2) * 0.18 +
+        Math.max(0, 100 - unmatchedRate * 3) * 0.12,
+    ),
+    0,
+    100,
+  );
+  const state =
+    routingScore >= 82
+      ? "steady"
+      : routingScore >= 66
+        ? "watch"
+        : "critical";
+
+  const topIntents = planner.topIntents.map((item) => ({
+    label: formatIntentLabel(item.intent),
+    count: item.count,
+    share: Math.round((item.count / Math.max(1, planner.plannedCount)) * 100),
+  })) satisfies DashboardMixItem[];
+
+  return {
+    score: routingScore,
+    state,
+    averageConfidence,
+    clarificationRate,
+    unmatchedRate,
+    lowConfidenceCount: planner.lowConfidenceCount,
+    activeRecordFollowUps: planner.activeRecordFollowUps,
+    topIntents:
+      topIntents.length > 0
+        ? topIntents
+        : ([{ label: "No planned intents yet", count: 0, share: 0 }] satisfies DashboardRoutingItem[]),
+  };
+}
+
+function formatIntentLabel(intent: string) {
+  return intent
+    .replaceAll(".", " / ")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function chipTone(
   tone: "steady" | "watch" | "critical" | "idle" | "healthy" | "ok" | "warn" | "bad" | "info",
 ) {
@@ -759,6 +875,10 @@ function dialColor(tone: "steady" | "watch" | "critical" | "idle") {
     case "idle":
       return "#89bcff";
   }
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function latestSyncTimestamp(states: SyncStateRow[]) {
