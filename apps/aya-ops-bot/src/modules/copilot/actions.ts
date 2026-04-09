@@ -3,7 +3,7 @@ import {
   ValidationError,
 } from "../../app/errors.js";
 import { getBlueRecordDetail } from "../../blue/record-detail.js";
-import { listBotAuditLogsForDay, listBotAuditLogsForEmployeeDay } from "../../db.js";
+import { listBotAuditLogsForDay, listBotAuditLogsForEmployeeDay, listBotAuditLogsInRange } from "../../db.js";
 import {
   getIndexedRecord,
   resolveListQuery,
@@ -46,8 +46,11 @@ import {
   buildEmployeeActivityReport,
   type EmployeeActivityFocus,
   buildWorkspaceActivityReport,
+  buildRecordActivityReport,
+  type RecordActivityFocus,
   type WorkspaceActivityFocus,
 } from "./admin-activity-report.js";
+import { normalizeActivityDateRange } from "./activity-date-range.js";
 
 const BLUE_WRITE_AUTH_REJECTED_MESSAGE =
   "Blue rejected your saved personal Token ID and Secret for this write action. Open the Aya MCP server settings, re-save your Blue Token ID and Secret from Blue > Profile > API, then try again.";
@@ -223,19 +226,31 @@ export async function getEmployeeActivityReport(input: {
   employeeEmail?: string;
   employeeName?: string;
   date?: string;
+  dateStart?: string;
+  dateEnd?: string;
+  dateLabel?: string;
   focus?: EmployeeActivityFocus;
   transport?: string;
 }) {
   const actor = await resolveActorOrThrow(input);
-  const date = normalizeDate(input.date);
-  const rows = await listBotAuditLogsForEmployeeDay({
-    employeeId: actor.employeeId,
-    dateIso: date,
-  });
+  const range = normalizeActivityDateRange(input);
+  const rows =
+    range.dateStart === range.dateEnd
+      ? await listBotAuditLogsForEmployeeDay({
+          employeeId: actor.employeeId,
+          dateIso: range.dateStart,
+        })
+      : await listBotAuditLogsInRange({
+          employeeId: actor.employeeId,
+          dateStartIso: range.dateStart,
+          dateEndIso: range.dateEnd,
+        });
 
   return buildEmployeeActivityReport({
     employeeName: actor.displayName,
-    date,
+    dateStart: range.dateStart,
+    dateEnd: range.dateEnd,
+    dateLabel: range.dateLabel,
     rows,
     focus: input.focus,
   });
@@ -243,15 +258,76 @@ export async function getEmployeeActivityReport(input: {
 
 export async function getWorkspaceActivityReport(input: {
   date?: string;
+  dateStart?: string;
+  dateEnd?: string;
+  dateLabel?: string;
   focus?: WorkspaceActivityFocus;
 }) {
-  const date = normalizeDate(input.date);
-  const rows = await listBotAuditLogsForDay({
-    dateIso: date,
-  });
+  const range = normalizeActivityDateRange(input);
+  const rows =
+    range.dateStart === range.dateEnd
+      ? await listBotAuditLogsForDay({
+          dateIso: range.dateStart,
+        })
+      : await listBotAuditLogsInRange({
+          dateStartIso: range.dateStart,
+          dateEndIso: range.dateEnd,
+        });
 
   return buildWorkspaceActivityReport({
-    date,
+    dateStart: range.dateStart,
+    dateEnd: range.dateEnd,
+    dateLabel: range.dateLabel,
+    rows,
+    focus: input.focus,
+  });
+}
+
+export async function getRecordActivityReport(input: {
+  recordId?: string;
+  recordQuery?: string;
+  useActiveRecordContext?: boolean;
+  date?: string;
+  dateStart?: string;
+  dateEnd?: string;
+  dateLabel?: string;
+  focus?: RecordActivityFocus;
+  actor?: EmployeeIdentity | null;
+  transport?: string;
+}) {
+  const resolved =
+    input.recordId && input.recordId.trim()
+      ? await resolveDirectRecordReference(
+          input.recordId.trim(),
+          input.actor ?? null,
+          input.transport,
+        )
+      : await resolveRecordOrThrow({
+          query: input.recordQuery,
+          fieldName: "recordQuery",
+          actor: input.actor ?? null,
+          transport: input.transport ?? "mcp",
+          continuationAction: "activity.record_report",
+          useActiveRecordContext: input.useActiveRecordContext,
+        });
+
+  const range = normalizeActivityDateRange(input);
+  const rows =
+    range.dateStart === range.dateEnd
+      ? await listBotAuditLogsForDay({
+          dateIso: range.dateStart,
+        })
+      : await listBotAuditLogsInRange({
+          dateStartIso: range.dateStart,
+          dateEndIso: range.dateEnd,
+        });
+
+  return buildRecordActivityReport({
+    recordId: resolved.id,
+    recordTitle: resolved.title,
+    dateStart: range.dateStart,
+    dateEnd: range.dateEnd,
+    dateLabel: range.dateLabel,
     rows,
     focus: input.focus,
   });

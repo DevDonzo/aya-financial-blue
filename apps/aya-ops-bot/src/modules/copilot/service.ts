@@ -26,6 +26,7 @@ import {
   getEmployeeDaySummary,
   getEmployeeFollowUpQueue,
   getEmployeeWorkload,
+  getRecordActivityReport,
   getReportingOverview,
   getTeamDaySummary,
   getWorkspaceActivityReport,
@@ -296,6 +297,7 @@ function enforceIntentPermissions(actor: EmployeeIdentity, plan: IntentPlan) {
 
   if (
     plan.intent === "activity.employee_report" ||
+    plan.intent === "activity.record_report" ||
     plan.intent === "activity.workspace_report" ||
     plan.intent === "summary.team_day" ||
     plan.intent === "summary.no_activity_day" ||
@@ -360,7 +362,62 @@ async function executePlan(input: {
           typeof plan.parameters.date === "string"
             ? plan.parameters.date
             : undefined,
+        dateStart:
+          typeof plan.parameters.dateStart === "string"
+            ? plan.parameters.dateStart
+            : undefined,
+        dateEnd:
+          typeof plan.parameters.dateEnd === "string"
+            ? plan.parameters.dateEnd
+            : undefined,
+        dateLabel:
+          typeof plan.parameters.dateLabel === "string"
+            ? plan.parameters.dateLabel
+            : undefined,
         focus,
+        transport,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "activity.record_report": {
+      const focus =
+        plan.parameters.activityFocus === "comments" ||
+        plan.parameters.activityFocus === "moves" ||
+        plan.parameters.activityFocus === "timeline"
+          ? plan.parameters.activityFocus
+          : "all";
+      const result = await getRecordActivityReport({
+        recordId:
+          typeof plan.parameters.recordId === "string"
+            ? plan.parameters.recordId
+            : undefined,
+        recordQuery:
+          typeof plan.parameters.recordQuery === "string"
+            ? plan.parameters.recordQuery
+            : undefined,
+        useActiveRecordContext: plan.parameters.useActiveRecordContext === true,
+        date:
+          typeof plan.parameters.date === "string"
+            ? plan.parameters.date
+            : undefined,
+        dateStart:
+          typeof plan.parameters.dateStart === "string"
+            ? plan.parameters.dateStart
+            : undefined,
+        dateEnd:
+          typeof plan.parameters.dateEnd === "string"
+            ? plan.parameters.dateEnd
+            : undefined,
+        dateLabel:
+          typeof plan.parameters.dateLabel === "string"
+            ? plan.parameters.dateLabel
+            : undefined,
+        focus,
+        actor,
         transport,
       });
       return {
@@ -381,6 +438,18 @@ async function executePlan(input: {
         date:
           typeof plan.parameters.date === "string"
             ? plan.parameters.date
+            : undefined,
+        dateStart:
+          typeof plan.parameters.dateStart === "string"
+            ? plan.parameters.dateStart
+            : undefined,
+        dateEnd:
+          typeof plan.parameters.dateEnd === "string"
+            ? plan.parameters.dateEnd
+            : undefined,
+        dateLabel:
+          typeof plan.parameters.dateLabel === "string"
+            ? plan.parameters.dateLabel
             : undefined,
         focus,
       });
@@ -797,6 +866,7 @@ function getAuditAdapter(intent: IntentName) {
     case "identity.self":
     case "summary.employee_day":
     case "activity.employee_report":
+    case "activity.record_report":
     case "activity.workspace_report":
     case "summary.team_day":
     case "summary.no_activity_day":
@@ -830,8 +900,11 @@ function getAuditCommandName(intent: IntentName) {
     case "reporting.question":
       return "answerReportingQuestion";
     case "activity.employee_report":
-    case "activity.workspace_report":
       return "employeeActivityReport";
+    case "activity.record_report":
+      return "recordActivityReport";
+    case "activity.workspace_report":
+      return "workspaceActivityReport";
     default:
       return intent;
   }

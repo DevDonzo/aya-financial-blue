@@ -13,6 +13,7 @@ import {
   getEmployeeDaySummary,
   getEmployeeFollowUpQueue,
   getEmployeeWorkload,
+  getRecordActivityReport,
   getTeamDaySummary,
   getWorkspaceActivityReport,
   moveClientToStage,
@@ -314,19 +315,31 @@ function createAyaMcpServer() {
         employeeId: z.string().optional(),
         employeeEmail: z.string().email().optional(),
         employeeName: z.string().optional(),
-        date: z.string().optional(),
+        date: z
+          .string()
+          .optional()
+          .describe("Optional single date in YYYY-MM-DD format."),
+        dateStart: z.string().optional(),
+        dateEnd: z.string().optional(),
+        dateLabel: z.string().optional(),
         focus: z
           .enum(["all", "comments", "moves", "creates", "timeline"])
           .default("all"),
       },
     },
-    async ({ employeeId, employeeEmail, employeeName, date, focus }, extra) => {
+    async (
+      { employeeId, employeeEmail, employeeName, date, dateStart, dateEnd, dateLabel, focus },
+      extra,
+    ) => {
       await requireAdminToolActor(extra.requestInfo?.headers);
       const result = await getEmployeeActivityReport({
         employeeId,
         employeeEmail,
         employeeName,
         date,
+        dateStart,
+        dateEnd,
+        dateLabel,
         focus,
       });
       return {
@@ -347,16 +360,65 @@ function createAyaMcpServer() {
           .string()
           .optional()
           .describe("Optional date in YYYY-MM-DD format. Defaults to today."),
+        dateStart: z.string().optional(),
+        dateEnd: z.string().optional(),
+        dateLabel: z.string().optional(),
         focus: z
           .enum(["all", "comments", "moves", "creates", "timeline"])
           .default("all"),
       },
     },
-    async ({ date, focus }, extra) => {
+    async ({ date, dateStart, dateEnd, dateLabel, focus }, extra) => {
       await requireAdminToolActor(extra.requestInfo?.headers);
       const result = await getWorkspaceActivityReport({
         date,
+        dateStart,
+        dateEnd,
+        dateLabel,
         focus,
+      });
+
+      return {
+        content: [{ type: "text", text: result.responseText }],
+        structuredContent: toStructuredContent(result),
+      };
+    },
+  );
+
+  server.registerTool(
+    "aya_get_record_activity_report",
+    {
+      title: "Get Client Activity Report",
+      description:
+        "Admin-only audit-backed client activity report for the allowed Aya workspace `03 - AYA x Hamza/ AI`. Use this when admins ask who touched a client, who commented on a file, what happened on a client, or for a client activity timeline.",
+      inputSchema: {
+        recordId: z.string().optional(),
+        clientQuery: z
+          .string()
+          .optional()
+          .describe("Client name, record title, email, or phone number"),
+        date: z
+          .string()
+          .optional()
+          .describe("Optional single date in YYYY-MM-DD format."),
+        dateStart: z.string().optional(),
+        dateEnd: z.string().optional(),
+        dateLabel: z.string().optional(),
+        focus: z.enum(["all", "comments", "moves", "timeline"]).default("all"),
+      },
+    },
+    async ({ recordId, clientQuery, date, dateStart, dateEnd, dateLabel, focus }, extra) => {
+      const actor = await requireAdminToolActor(extra.requestInfo?.headers);
+      const result = await getRecordActivityReport({
+        recordId,
+        recordQuery: clientQuery,
+        date,
+        dateStart,
+        dateEnd,
+        dateLabel,
+        focus,
+        actor,
+        transport: "mcp",
       });
 
       return {

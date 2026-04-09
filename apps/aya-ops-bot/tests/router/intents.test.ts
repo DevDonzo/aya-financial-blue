@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { detectIntent, planEmployeeIntent } from "../../src/router/intents.js";
 
+const fixedNowIso = "2026-04-09T12:00:00.000Z";
+
 const actor = {
   employeeId: "emp_1",
   displayName: "Hamza Paracha",
@@ -225,6 +227,106 @@ describe("detectIntent", () => {
       intent: "activity.workspace_report",
       parameters: {
         activityFocus: "moves",
+      },
+      requiresClarification: false,
+    });
+  });
+
+  it("maps admin weekly employee activity requests to the employee activity report", () => {
+    const result = planEmployeeIntent({
+      actor: adminActor,
+      message: "what did Sheraz do this week",
+      nowIso: fixedNowIso,
+    });
+
+    expect(result).toMatchObject({
+      intent: "activity.employee_report",
+      parameters: {
+        employeeName: "Sheraz",
+        activityFocus: "all",
+        dateStart: "2026-04-06",
+        dateEnd: "2026-04-09",
+        dateLabel: "this week",
+      },
+      requiresClarification: false,
+    });
+  });
+
+  it("maps admin last-week employee activity requests to the employee activity report", () => {
+    const result = planEmployeeIntent({
+      actor: adminActor,
+      message: "what did Sheraz do last week",
+      nowIso: fixedNowIso,
+    });
+
+    expect(result).toMatchObject({
+      intent: "activity.employee_report",
+      parameters: {
+        employeeName: "Sheraz",
+        activityFocus: "all",
+        dateStart: "2026-03-30",
+        dateEnd: "2026-04-05",
+        dateLabel: "last week",
+      },
+      requiresClarification: false,
+    });
+  });
+
+  it("maps admin rolling-range workspace activity requests to the workspace activity report", () => {
+    const result = planEmployeeIntent({
+      actor: adminActor,
+      message: "who created leads last 7 days",
+      nowIso: fixedNowIso,
+    });
+
+    expect(result).toMatchObject({
+      intent: "activity.workspace_report",
+      parameters: {
+        activityFocus: "creates",
+        dateStart: "2026-04-03",
+        dateEnd: "2026-04-09",
+        dateLabel: "last 7 days",
+      },
+      requiresClarification: false,
+    });
+  });
+
+  it("maps admin client activity questions to the record activity report", () => {
+    const result = planEmployeeIntent({
+      actor: adminActor,
+      message: "who touched Hamza Client today",
+      nowIso: fixedNowIso,
+    });
+
+    expect(result).toMatchObject({
+      intent: "activity.record_report",
+      parameters: {
+        recordQuery: "Hamza Client",
+        activityFocus: "all",
+        dateStart: "2026-04-09",
+        dateEnd: "2026-04-09",
+        dateLabel: "today",
+      },
+      requiresClarification: false,
+    });
+  });
+
+  it("maps admin range-based client timeline questions to the record activity report", () => {
+    const result = planEmployeeIntent({
+      actor: adminActor,
+      message:
+        "show me the timeline for Hamza Client from 2026-04-08 to 2026-04-09",
+      nowIso: fixedNowIso,
+    });
+
+    expect(result).toMatchObject({
+      intent: "activity.record_report",
+      parameters: {
+        recordQuery: "Hamza Client",
+        activityFocus: "timeline",
+        dateStart: "2026-04-08",
+        dateEnd: "2026-04-09",
+        dateLabel: "2026-04-08 to 2026-04-09",
       },
       requiresClarification: false,
     });

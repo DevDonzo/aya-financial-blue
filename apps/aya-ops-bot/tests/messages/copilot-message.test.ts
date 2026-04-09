@@ -736,6 +736,292 @@ describe("Aya copilot message flow", () => {
     }
   });
 
+  it("returns an admin client activity report with exact people who touched the file", async () => {
+    const env = createTestEnvironment();
+
+    try {
+      const {
+        ensureEmployee,
+        initializeDatabase,
+        insertBotAuditLog,
+        createId,
+        upsertBlueRecordsCache,
+      } = await import("../../src/db.js");
+
+      await initializeDatabase();
+      await ensureEmployee({
+        employeeId: "admin_1",
+        displayName: "Admin User",
+        email: "admin@ayafinancial.com",
+        roleName: "admin",
+      });
+      await ensureEmployee({
+        employeeId: "employee_1",
+        displayName: "Hamza Paracha",
+        email: "hamza@ayafinancial.com",
+        roleName: "employee",
+      });
+      await ensureEmployee({
+        employeeId: "employee_2",
+        displayName: "Sheraz Khan",
+        email: "sheraz@ayafinancial.com",
+        roleName: "employee",
+      });
+      await upsertBlueRecordsCache({
+        workspaceId: "cmn524yr800e101mh7kn44mhf",
+        items: [
+          {
+            id: "record_hamza",
+            title: "Hamza Client",
+            normalizedTitle: "hamza client",
+            listId: "list_leads",
+            listTitle: "Leads",
+            updatedAt: "2026-04-09T12:00:00.000Z",
+            assigneeIdsJson: "[]",
+            searchText: "Hamza Client",
+          },
+        ],
+      });
+
+      await insertBotAuditLog({
+        id: createId("audit"),
+        employeeId: "employee_1",
+        transport: "web",
+        inboundText: "show me Hamza Client",
+        detectedIntent: "records.detail",
+        adapter: "aya-service",
+        commandName: "getBlueRecordDetail",
+        outcome: "success",
+        responseText: "Hamza Client is in Leads.",
+        responseJson: {
+          data: {
+            recordId: "record_hamza",
+            recordTitle: "Hamza Client",
+          },
+        },
+      });
+      await insertBotAuditLog({
+        id: createId("audit"),
+        employeeId: "employee_2",
+        transport: "web",
+        inboundText: "add note to Hamza Client: sent docs",
+        detectedIntent: "comments.create",
+        adapter: "aya-service",
+        commandName: "createComment",
+        outcome: "success",
+        responseText: "Added comment to Hamza Client.",
+        responseJson: {
+          data: {
+            recordId: "record_hamza",
+            recordTitle: "Hamza Client",
+            text: "sent docs",
+          },
+        },
+      });
+      await insertBotAuditLog({
+        id: createId("audit"),
+        employeeId: "employee_2",
+        transport: "web",
+        inboundText: "move Hamza Client to Underwriting",
+        detectedIntent: "records.move",
+        adapter: "aya-service",
+        commandName: "moveTodo",
+        outcome: "success",
+        responseText: "Moved Hamza Client to Underwriting.",
+        responseJson: {
+          data: {
+            recordId: "record_hamza",
+            recordTitle: "Hamza Client",
+            targetListTitle: "Underwriting",
+          },
+        },
+      });
+      await insertBotAuditLog({
+        id: createId("audit"),
+        employeeId: "employee_1",
+        transport: "web",
+        inboundText: "show me Another Client",
+        detectedIntent: "records.detail",
+        adapter: "aya-service",
+        commandName: "getBlueRecordDetail",
+        outcome: "success",
+        responseText: "Another Client is in Leads.",
+        responseJson: {
+          data: {
+            recordId: "record_other",
+            recordTitle: "Another Client",
+          },
+        },
+      });
+
+      const { handleInboundMessage } = await import(
+        "../../src/messages/handle-message.js"
+      );
+
+      const response = await handleInboundMessage({
+        actorEmployeeId: "admin_1",
+        message: "who touched Hamza Client today",
+      });
+
+      expect(response).toMatchObject({
+        matched: true,
+        intent: "activity.record_report",
+      });
+      expect(response.responseText).toContain(
+        "Activity on Hamza Client in today",
+      );
+      expect(response.responseText).toContain("Employees who touched this file:");
+      expect(response.responseText).toContain("Sheraz Khan (2 total");
+      expect(response.responseText).toContain("Hamza Paracha (1 total");
+      expect(response.responseText).toContain(
+        "Hamza Paracha: reviewed Hamza Client",
+      );
+      expect(response.responseText).toContain(
+        "Sheraz Khan: commented on Hamza Client: sent docs",
+      );
+      expect(response.responseText).toContain(
+        "Sheraz Khan: moved Hamza Client to Underwriting",
+      );
+      expect(response.responseText).not.toContain("Another Client");
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it("returns an admin client timeline report for an explicit date range", async () => {
+    const env = createTestEnvironment();
+
+    try {
+      const {
+        ensureEmployee,
+        initializeDatabase,
+        insertBotAuditLog,
+        createId,
+        upsertBlueRecordsCache,
+      } = await import("../../src/db.js");
+
+      await initializeDatabase();
+      await ensureEmployee({
+        employeeId: "admin_1",
+        displayName: "Admin User",
+        email: "admin@ayafinancial.com",
+        roleName: "admin",
+      });
+      await ensureEmployee({
+        employeeId: "employee_1",
+        displayName: "Hamza Paracha",
+        email: "hamza@ayafinancial.com",
+        roleName: "employee",
+      });
+      await ensureEmployee({
+        employeeId: "employee_2",
+        displayName: "Sheraz Khan",
+        email: "sheraz@ayafinancial.com",
+        roleName: "employee",
+      });
+      await upsertBlueRecordsCache({
+        workspaceId: "cmn524yr800e101mh7kn44mhf",
+        items: [
+          {
+            id: "record_hamza",
+            title: "Hamza Client",
+            normalizedTitle: "hamza client",
+            listId: "list_leads",
+            listTitle: "Leads",
+            updatedAt: "2026-04-09T12:00:00.000Z",
+            assigneeIdsJson: "[]",
+            searchText: "Hamza Client",
+          },
+        ],
+      });
+
+      await insertBotAuditLog({
+        id: createId("audit"),
+        createdAt: "2026-04-07T09:10:00.000Z",
+        employeeId: "employee_1",
+        transport: "web",
+        inboundText: "show me Hamza Client",
+        detectedIntent: "records.detail",
+        adapter: "aya-service",
+        commandName: "getBlueRecordDetail",
+        outcome: "success",
+        responseText: "Hamza Client is in Leads.",
+        responseJson: {
+          data: {
+            recordId: "record_hamza",
+            recordTitle: "Hamza Client",
+          },
+        },
+      });
+      await insertBotAuditLog({
+        id: createId("audit"),
+        createdAt: "2026-04-08T14:15:00.000Z",
+        employeeId: "employee_2",
+        transport: "web",
+        inboundText: "add note to Hamza Client: sent docs",
+        detectedIntent: "comments.create",
+        adapter: "aya-service",
+        commandName: "createComment",
+        outcome: "success",
+        responseText: "Added comment to Hamza Client.",
+        responseJson: {
+          data: {
+            recordId: "record_hamza",
+            recordTitle: "Hamza Client",
+            text: "sent docs",
+          },
+        },
+      });
+      await insertBotAuditLog({
+        id: createId("audit"),
+        createdAt: "2026-04-09T16:45:00.000Z",
+        employeeId: "employee_1",
+        transport: "web",
+        inboundText: "move Hamza Client to Underwriting",
+        detectedIntent: "records.move",
+        adapter: "aya-service",
+        commandName: "moveTodo",
+        outcome: "success",
+        responseText: "Moved Hamza Client to Underwriting.",
+        responseJson: {
+          data: {
+            recordId: "record_hamza",
+            recordTitle: "Hamza Client",
+            targetListTitle: "Underwriting",
+          },
+        },
+      });
+
+      const { handleInboundMessage } = await import(
+        "../../src/messages/handle-message.js"
+      );
+
+      const response = await handleInboundMessage({
+        actorEmployeeId: "admin_1",
+        message:
+          "show me the timeline for Hamza Client from 2026-04-08 to 2026-04-09",
+      });
+
+      expect(response).toMatchObject({
+        matched: true,
+        intent: "activity.record_report",
+      });
+      expect(response.responseText).toContain(
+        "Activity on Hamza Client in 2026-04-08 to 2026-04-09: 2 successful interactions.",
+      );
+      expect(response.responseText).toContain("Timeline:");
+      expect(response.responseText).toContain(
+        "2026-04-09 16:45 Hamza Paracha: moved Hamza Client to Underwriting",
+      );
+      expect(response.responseText).toContain(
+        "2026-04-08 14:15 Sheraz Khan: commented on Hamza Client: sent docs",
+      );
+      expect(response.responseText).not.toContain("2026-04-07 09:10");
+    } finally {
+      env.cleanup();
+    }
+  });
+
   it("moves the active client context through the shared execution service", async () => {
     const env = createTestEnvironment();
 

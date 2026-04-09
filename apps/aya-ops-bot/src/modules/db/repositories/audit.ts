@@ -6,6 +6,7 @@ import { db } from "../kysely.js";
 
 export async function insertBotAuditLog(input: {
   id: string;
+  createdAt?: string;
   employeeId?: string;
   transport: string;
   inboundText: string;
@@ -22,6 +23,7 @@ export async function insertBotAuditLog(input: {
     .insertInto("bot_audit_logs")
     .values({
       id: input.id,
+      ...(input.createdAt ? { created_at: input.createdAt } : {}),
       employee_id: input.employeeId ?? null,
       transport: input.transport,
       inbound_text: input.inboundText,
@@ -252,6 +254,45 @@ export async function listBotAuditLogsForDay(input: {
     .where(sql`substr(l.created_at, 1, 10)`, "=", input.dateIso)
     .orderBy("l.created_at", "desc")
     .limit(input.limit ?? 1000)
+    .execute();
+}
+
+export async function listBotAuditLogsInRange(input: {
+  dateStartIso: string;
+  dateEndIso: string;
+  employeeId?: string;
+  limit?: number;
+}) {
+  let query = db
+    .selectFrom("bot_audit_logs as l")
+    .leftJoin("employees as e", "e.id", "l.employee_id")
+    .select([
+      "l.id",
+      "l.created_at",
+      "l.employee_id",
+      "e.display_name",
+      "e.role_name",
+      "l.transport",
+      "l.detected_intent",
+      "l.adapter",
+      "l.command_name",
+      "l.command_args",
+      "l.outcome",
+      "l.inbound_text",
+      "l.response_text",
+      "l.request_json",
+      "l.response_json",
+    ])
+    .where(sql`substr(l.created_at, 1, 10)`, ">=", input.dateStartIso)
+    .where(sql`substr(l.created_at, 1, 10)`, "<=", input.dateEndIso);
+
+  if (input.employeeId) {
+    query = query.where("l.employee_id", "=", input.employeeId);
+  }
+
+  return await query
+    .orderBy("l.created_at", "desc")
+    .limit(input.limit ?? 2000)
     .execute();
 }
 

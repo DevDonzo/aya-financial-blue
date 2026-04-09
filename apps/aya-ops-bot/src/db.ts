@@ -78,6 +78,7 @@ export const getAdminDashboardLogDetail = auditRepo.getAdminDashboardLogDetail;
 export const listBotAuditLogsForEmployeeDay =
   auditRepo.listBotAuditLogsForEmployeeDay;
 export const listBotAuditLogsForDay = auditRepo.listBotAuditLogsForDay;
+export const listBotAuditLogsInRange = auditRepo.listBotAuditLogsInRange;
 
 export const getBlueSyncState = syncStateRepo.getBlueSyncState;
 export const listBlueSyncStates = syncStateRepo.listBlueSyncStates;

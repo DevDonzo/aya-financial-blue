@@ -30,14 +30,18 @@ export type WorkspaceActivityFocus =
   | "creates"
   | "timeline";
 
+export type RecordActivityFocus = "all" | "comments" | "moves" | "timeline";
+
 interface ParsedActivityItem {
   kind: "comment" | "move" | "create" | "read" | "other";
   occurredAt: string;
   outcome: string;
   intent: string | null;
+  employeeId: string | null;
   employeeName: string;
   summary: string;
   inboundText: string;
+  recordId: string | null;
   recordTitle: string | null;
   targetListTitle: string | null;
   text: string | null;
@@ -46,7 +50,9 @@ interface ParsedActivityItem {
 
 export function buildEmployeeActivityReport(input: {
   employeeName: string;
-  date: string;
+  dateStart: string;
+  dateEnd: string;
+  dateLabel: string;
   rows: EmployeeAuditLogRow[];
   focus?: EmployeeActivityFocus;
 }) {
@@ -65,7 +71,9 @@ export function buildEmployeeActivityReport(input: {
 
   return {
     employeeName: input.employeeName,
-    date: input.date,
+    dateStart: input.dateStart,
+    dateEnd: input.dateEnd,
+    dateLabel: input.dateLabel,
     totalInteractions: input.rows.length,
     successfulActions: successful.length,
     clarificationCount: clarifications,
@@ -78,7 +86,11 @@ export function buildEmployeeActivityReport(input: {
     recentActions: parsed.slice(0, 12),
     responseText: buildReportText({
       employeeName: input.employeeName,
-      date: input.date,
+      dateLabel: formatScopeLabel(
+        input.dateLabel,
+        input.dateStart,
+        input.dateEnd,
+      ),
       focus: input.focus ?? "all",
       totalInteractions: input.rows.length,
       successfulActions: successful.length,
@@ -95,7 +107,9 @@ export function buildEmployeeActivityReport(input: {
 }
 
 export function buildWorkspaceActivityReport(input: {
-  date: string;
+  dateStart: string;
+  dateEnd: string;
+  dateLabel: string;
   rows: EmployeeAuditLogRow[];
   focus?: WorkspaceActivityFocus;
 }) {
@@ -115,7 +129,9 @@ export function buildWorkspaceActivityReport(input: {
   const focus = input.focus ?? "all";
 
   return {
-    date: input.date,
+    dateStart: input.dateStart,
+    dateEnd: input.dateEnd,
+    dateLabel: input.dateLabel,
     totalInteractions: input.rows.length,
     successfulActions: successful.length,
     clarificationCount: clarifications,
@@ -129,7 +145,11 @@ export function buildWorkspaceActivityReport(input: {
     employeeStats,
     recentActions: parsed.slice(0, 12),
     responseText: buildWorkspaceReportText({
-      date: input.date,
+      dateLabel: formatScopeLabel(
+        input.dateLabel,
+        input.dateStart,
+        input.dateEnd,
+      ),
       focus,
       totalInteractions: input.rows.length,
       successfulActions: successful.length,
@@ -147,9 +167,64 @@ export function buildWorkspaceActivityReport(input: {
   };
 }
 
+export function buildRecordActivityReport(input: {
+  recordTitle: string;
+  dateStart: string;
+  dateEnd: string;
+  dateLabel: string;
+  rows: EmployeeAuditLogRow[];
+  recordId?: string;
+  focus?: RecordActivityFocus;
+}) {
+  const parsed = input.rows
+    .map(parseAuditRow)
+    .filter((item) => item.outcome === "success")
+    .filter((item) =>
+      matchesRecordActivity(item, input.recordId ?? null, input.recordTitle),
+    );
+  const comments = parsed.filter((item) => item.kind === "comment");
+  const moves = parsed.filter((item) => item.kind === "move");
+  const creates = parsed.filter((item) => item.kind === "create");
+  const reads = parsed.filter((item) => item.kind === "read");
+  const employeeStats = summarizeWorkspaceEmployees(parsed);
+  const focus = input.focus ?? "all";
+  const dateLabel = formatScopeLabel(
+    input.dateLabel,
+    input.dateStart,
+    input.dateEnd,
+  );
+
+  return {
+    recordId: input.recordId ?? null,
+    recordTitle: input.recordTitle,
+    dateStart: input.dateStart,
+    dateEnd: input.dateEnd,
+    dateLabel: input.dateLabel,
+    totalInteractions: parsed.length,
+    comments,
+    moves,
+    creates,
+    reads,
+    employeeStats,
+    recentActions: parsed.slice(0, 12),
+    responseText: buildRecordReportText({
+      recordTitle: input.recordTitle,
+      dateLabel,
+      focus,
+      totalInteractions: parsed.length,
+      comments,
+      moves,
+      creates,
+      reads,
+      employeeStats,
+      recentActions: parsed.slice(0, 8),
+    }),
+  };
+}
+
 function buildReportText(input: {
   employeeName: string;
-  date: string;
+  dateLabel: string;
   focus: EmployeeActivityFocus;
   totalInteractions: number;
   successfulActions: number;
@@ -163,16 +238,16 @@ function buildReportText(input: {
   recentActions: ParsedActivityItem[];
 }) {
   if (input.totalInteractions === 0) {
-    return `${input.employeeName} has no logged Aya activity for ${input.date}.`;
+    return `${input.employeeName} has no logged Aya activity for ${input.dateLabel}.`;
   }
 
   if (input.focus === "comments") {
     return buildFocusedSectionText(
       `${input.employeeName} added ${input.comments.length} comment${
         input.comments.length === 1 ? "" : "s"
-      } on ${input.date}.`,
+      } in ${input.dateLabel}.`,
       input.comments,
-      "No successful comments were logged for that day.",
+      "No successful comments were logged for that period.",
     );
   }
 
@@ -180,9 +255,9 @@ function buildReportText(input: {
     return buildFocusedSectionText(
       `${input.employeeName} moved ${input.moves.length} client file${
         input.moves.length === 1 ? "" : "s"
-      } on ${input.date}.`,
+      } in ${input.dateLabel}.`,
       input.moves,
-      "No successful client moves were logged for that day.",
+      "No successful client moves were logged for that period.",
     );
   }
 
@@ -190,9 +265,9 @@ function buildReportText(input: {
     return buildFocusedSectionText(
       `${input.employeeName} created ${input.creates.length} lead${
         input.creates.length === 1 ? "" : "s"
-      } on ${input.date}.`,
+      } in ${input.dateLabel}.`,
       input.creates,
-      "No successful lead creation was logged for that day.",
+      "No successful lead creation was logged for that period.",
     );
   }
 
@@ -200,16 +275,16 @@ function buildReportText(input: {
     return buildFocusedSectionText(
       `${input.employeeName} had ${input.totalInteractions} Aya interaction${
         input.totalInteractions === 1 ? "" : "s"
-      } on ${input.date}.`,
+      } in ${input.dateLabel}.`,
       input.recentActions,
-      "No recent activity was logged for that day.",
+      "No recent activity was logged for that period.",
     );
   }
 
   return [
     `${input.employeeName} had ${input.totalInteractions} Aya interaction${
       input.totalInteractions === 1 ? "" : "s"
-    } on ${input.date}.`,
+    } in ${input.dateLabel}.`,
     `Successful: ${input.successfulActions} | Clarifications: ${input.clarificationCount} | Failures: ${input.failureCount}`,
     `Writes: ${input.writeCount} | Reads: ${input.readCount} | Comments: ${input.comments.length} | Moves: ${input.moves.length} | Leads created: ${input.creates.length}`,
     buildSection("Exact comments", input.comments, "No successful comments logged."),
@@ -248,7 +323,7 @@ function buildSection(
 }
 
 function buildWorkspaceReportText(input: {
-  date: string;
+  dateLabel: string;
   focus: WorkspaceActivityFocus;
   totalInteractions: number;
   successfulActions: number;
@@ -264,12 +339,12 @@ function buildWorkspaceReportText(input: {
   recentActions: ParsedActivityItem[];
 }) {
   if (input.totalInteractions === 0) {
-    return `No Aya activity is logged for ${input.date}.`;
+    return `No Aya activity is logged for ${input.dateLabel}.`;
   }
 
   if (input.focus === "comments") {
     return [
-      `Workspace comments for ${input.date}: ${input.comments.length} successful comment${
+      `Workspace comments for ${input.dateLabel}: ${input.comments.length} successful comment${
         input.comments.length === 1 ? "" : "s"
       } by ${countDistinctEmployees(input.comments)} employee${
         countDistinctEmployees(input.comments) === 1 ? "" : "s"
@@ -288,7 +363,7 @@ function buildWorkspaceReportText(input: {
 
   if (input.focus === "moves") {
     return [
-      `Workspace moves for ${input.date}: ${input.moves.length} successful move${
+      `Workspace moves for ${input.dateLabel}: ${input.moves.length} successful move${
         input.moves.length === 1 ? "" : "s"
       } by ${countDistinctEmployees(input.moves)} employee${
         countDistinctEmployees(input.moves) === 1 ? "" : "s"
@@ -307,7 +382,7 @@ function buildWorkspaceReportText(input: {
 
   if (input.focus === "creates") {
     return [
-      `Workspace lead creation for ${input.date}: ${input.creates.length} successful lead${
+      `Workspace lead creation for ${input.dateLabel}: ${input.creates.length} successful lead${
         input.creates.length === 1 ? "" : "s"
       } created by ${countDistinctEmployees(input.creates)} employee${
         countDistinctEmployees(input.creates) === 1 ? "" : "s"
@@ -326,7 +401,7 @@ function buildWorkspaceReportText(input: {
 
   if (input.focus === "timeline") {
     return [
-      `Workspace activity for ${input.date}: ${input.totalInteractions} Aya interaction${
+      `Workspace activity for ${input.dateLabel}: ${input.totalInteractions} Aya interaction${
         input.totalInteractions === 1 ? "" : "s"
       } across ${input.activeEmployees} active employee${
         input.activeEmployees === 1 ? "" : "s"
@@ -338,7 +413,7 @@ function buildWorkspaceReportText(input: {
   }
 
   return [
-    `Workspace activity for ${input.date}: ${input.totalInteractions} Aya interaction${
+    `Workspace activity for ${input.dateLabel}: ${input.totalInteractions} Aya interaction${
       input.totalInteractions === 1 ? "" : "s"
     } across ${input.activeEmployees} active employee${
       input.activeEmployees === 1 ? "" : "s"
@@ -357,6 +432,81 @@ function buildWorkspaceReportText(input: {
       input.recentActions,
       "No recent activity logged.",
     ),
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildRecordReportText(input: {
+  recordTitle: string;
+  dateLabel: string;
+  focus: RecordActivityFocus;
+  totalInteractions: number;
+  comments: ParsedActivityItem[];
+  moves: ParsedActivityItem[];
+  creates: ParsedActivityItem[];
+  reads: ParsedActivityItem[];
+  employeeStats: WorkspaceEmployeeStats[];
+  recentActions: ParsedActivityItem[];
+}) {
+  if (input.totalInteractions === 0) {
+    return `No Aya activity is logged for ${input.recordTitle} in ${input.dateLabel}.`;
+  }
+
+  if (input.focus === "comments") {
+    return [
+      `Comments on ${input.recordTitle} in ${input.dateLabel}: ${input.comments.length}.`,
+      buildLeaderboard(
+        "Employees who commented",
+        input.employeeStats.filter((item) => item.comments > 0),
+        (item) => `${item.employeeName} (${item.comments})`,
+        "No successful comments logged.",
+      ),
+      buildSection("Exact comments", input.comments, "No successful comments logged."),
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  if (input.focus === "moves") {
+    return [
+      `Moves on ${input.recordTitle} in ${input.dateLabel}: ${input.moves.length}.`,
+      buildLeaderboard(
+        "Employees who moved this file",
+        input.employeeStats.filter((item) => item.moves > 0),
+        (item) => `${item.employeeName} (${item.moves})`,
+        "No successful moves logged.",
+      ),
+      buildSection("Exact moves", input.moves, "No successful moves logged."),
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  if (input.focus === "timeline") {
+    return [
+      `Activity on ${input.recordTitle} in ${input.dateLabel}: ${input.totalInteractions} successful interaction${
+        input.totalInteractions === 1 ? "" : "s"
+      }.`,
+      buildSection("Timeline", input.recentActions, "No recent activity logged."),
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  return [
+    `Activity on ${input.recordTitle} in ${input.dateLabel}: ${input.totalInteractions} successful interaction${
+      input.totalInteractions === 1 ? "" : "s"
+    }.`,
+    `Comments: ${input.comments.length} | Moves: ${input.moves.length} | Leads created: ${input.creates.length} | Reads: ${input.reads.length}`,
+    buildLeaderboard(
+      "Employees who touched this file",
+      input.employeeStats,
+      (item) =>
+        `${item.employeeName} (${item.totalActions} total, ${item.comments} comments, ${item.moves} moves, ${item.reads} reads)`,
+      "No successful activity logged.",
+    ),
+    buildSection("Recent activity", input.recentActions, "No recent activity logged."),
   ]
     .filter(Boolean)
     .join("\n");
@@ -425,8 +575,45 @@ function countDistinctEmployees(items: ParsedActivityItem[]) {
 }
 
 function formatActivityLine(item: ParsedActivityItem) {
-  const timestamp = item.occurredAt.slice(11, 16);
-  return `${timestamp} ${item.employeeName}: ${item.summary}`;
+  const date = item.occurredAt.slice(0, 10);
+  const time = item.occurredAt.slice(11, 16);
+  return `${date} ${time} ${item.employeeName}: ${item.summary}`;
+}
+
+function formatScopeLabel(dateLabel: string, dateStart: string, dateEnd: string) {
+  if (dateLabel === dateStart && dateStart === dateEnd) {
+    return dateLabel;
+  }
+
+  if (dateLabel === "today" || dateLabel === "yesterday") {
+    return `${dateLabel} (${dateStart})`;
+  }
+
+  if (dateLabel === "this week" || dateLabel === "this month") {
+    return `${dateLabel} (${dateStart} to ${dateEnd})`;
+  }
+
+  return dateStart === dateEnd ? dateStart : `${dateStart} to ${dateEnd}`;
+}
+
+function matchesRecordActivity(
+  item: ParsedActivityItem,
+  recordId: string | null,
+  recordTitle: string,
+) {
+  if (recordId && item.recordId === recordId) {
+    return true;
+  }
+
+  if (!item.recordTitle) {
+    return false;
+  }
+
+  return normalizeValue(item.recordTitle) === normalizeValue(recordTitle);
+}
+
+function normalizeValue(value: string) {
+  return value.trim().toLowerCase();
 }
 
 function parseAuditRow(row: EmployeeAuditLogRow): ParsedActivityItem {
@@ -435,7 +622,9 @@ function parseAuditRow(row: EmployeeAuditLogRow): ParsedActivityItem {
     ? responseJson.data
     : null;
   const intent = row.detected_intent ?? null;
+  const employeeId = row.employee_id ?? null;
   const employeeName = row.display_name?.trim() || "Unknown employee";
+  const recordId = typeof data?.recordId === "string" ? data.recordId : null;
 
   if (intent === "comments.create") {
     const recordTitle =
@@ -446,12 +635,14 @@ function parseAuditRow(row: EmployeeAuditLogRow): ParsedActivityItem {
       occurredAt: row.created_at,
       outcome: row.outcome,
       intent,
+      employeeId,
       employeeName,
       summary:
         row.outcome === "success"
           ? `commented on ${recordTitle ?? "a client"}${text ? `: ${text}` : ""}`
           : `tried to add a client comment`,
       inboundText: row.inbound_text,
+      recordId,
       recordTitle,
       targetListTitle: null,
       text,
@@ -469,12 +660,14 @@ function parseAuditRow(row: EmployeeAuditLogRow): ParsedActivityItem {
       occurredAt: row.created_at,
       outcome: row.outcome,
       intent,
+      employeeId,
       employeeName,
       summary:
         row.outcome === "success"
           ? `moved ${recordTitle ?? "a client"} to ${targetListTitle ?? "another stage"}`
           : `tried to move ${recordTitle ?? "a client file"}`,
       inboundText: row.inbound_text,
+      recordId,
       recordTitle,
       targetListTitle,
       text: null,
@@ -491,12 +684,14 @@ function parseAuditRow(row: EmployeeAuditLogRow): ParsedActivityItem {
       occurredAt: row.created_at,
       outcome: row.outcome,
       intent,
+      employeeId,
       employeeName,
       summary:
         row.outcome === "success"
           ? `created ${recordTitle ?? "a lead"}${listTitle ? ` in ${listTitle}` : ""}`
           : `tried to create a lead`,
       inboundText: row.inbound_text,
+      recordId,
       recordTitle,
       targetListTitle: null,
       text: null,
@@ -512,12 +707,14 @@ function parseAuditRow(row: EmployeeAuditLogRow): ParsedActivityItem {
       occurredAt: row.created_at,
       outcome: row.outcome,
       intent,
+      employeeId,
       employeeName,
       summary:
         intent === "records.detail"
           ? `reviewed ${recordTitle ?? "a client file"}`
           : `reviewed comments for ${recordTitle ?? "a client file"}`,
       inboundText: row.inbound_text,
+      recordId,
       recordTitle,
       targetListTitle: null,
       text: null,
@@ -531,9 +728,11 @@ function parseAuditRow(row: EmployeeAuditLogRow): ParsedActivityItem {
       occurredAt: row.created_at,
       outcome: row.outcome,
       intent,
+      employeeId,
       employeeName,
       summary: "checked the follow-up queue",
       inboundText: row.inbound_text,
+      recordId,
       recordTitle: null,
       targetListTitle: null,
       text: null,
@@ -547,9 +746,11 @@ function parseAuditRow(row: EmployeeAuditLogRow): ParsedActivityItem {
       occurredAt: row.created_at,
       outcome: row.outcome,
       intent,
+      employeeId,
       employeeName,
       summary: "checked workload",
       inboundText: row.inbound_text,
+      recordId,
       recordTitle: null,
       targetListTitle: null,
       text: null,
@@ -562,9 +763,11 @@ function parseAuditRow(row: EmployeeAuditLogRow): ParsedActivityItem {
     occurredAt: row.created_at,
     outcome: row.outcome,
     intent,
+    employeeId,
     employeeName,
     summary: summarizeFallback(row),
     inboundText: row.inbound_text,
+    recordId,
     recordTitle: null,
     targetListTitle: null,
     text: null,

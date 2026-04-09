@@ -4,6 +4,10 @@ import type {
   IntentRequest,
   IntentName,
 } from "../../domain/types.js";
+import {
+  OPTIONAL_ACTIVITY_DATE_SUFFIX_PATTERN,
+  resolveActivityDateRangeFromMessage,
+} from "./activity-date-range.js";
 
 export interface IntentPlannerRequest extends IntentRequest {
   hasActiveRecordContext?: boolean;
@@ -72,6 +76,7 @@ const INTENT_RESOLVERS: Array<
   resolveTeamSummaryIntent,
   resolveNoActivityIntent,
   resolveEmployeeActivityIntent,
+  resolveRecordActivityIntent,
   resolveEmployeeSummaryIntent,
   resolveFollowUpIntent,
   resolveWorkloadIntent,
@@ -83,6 +88,19 @@ const INTENT_RESOLVERS: Array<
   resolveDetailIntent,
   resolveSearchIntent,
 ];
+
+const OPTIONAL_ACTIVITY_MESSAGE_END_PATTERN =
+  String.raw`${OPTIONAL_ACTIVITY_DATE_SUFFIX_PATTERN}[.?!]?$`;
+
+function activityMatch(message: string, source: string) {
+  return message.match(new RegExp(`${source}${OPTIONAL_ACTIVITY_MESSAGE_END_PATTERN}`, "i"));
+}
+
+function activityTest(message: string, source: string) {
+  return new RegExp(`${source}${OPTIONAL_ACTIVITY_MESSAGE_END_PATTERN}`, "i").test(
+    message,
+  );
+}
 
 function resolveIdentityIntent(
   request: IntentPlannerRequest,
@@ -164,13 +182,16 @@ function resolveWorkspaceActivityIntent(
 
   const rawMessage = request.message.trim();
   const message = normalize(rawMessage);
+  const dateRange = resolveActivityDateRangeFromMessage(
+    rawMessage,
+    request.nowIso,
+  );
 
   if (
-    message === "what changed today" ||
-    message === "what happened today" ||
-    message === "show me workspace activity today" ||
-    message === "show me all activity today" ||
-    message === "show me everything that happened today"
+    activityTest(rawMessage, String.raw`^what (?:changed|happened)`) ||
+    activityTest(rawMessage, String.raw`^(?:show(?: me)? )?workspace activity`) ||
+    activityTest(rawMessage, String.raw`^(?:show(?: me)? )?all activity`) ||
+    activityTest(rawMessage, String.raw`^(?:show(?: me)? )?everything that happened`)
   ) {
     return candidate(
       "activity.workspace_report",
@@ -178,14 +199,15 @@ function resolveWorkspaceActivityIntent(
       0.92,
       {
         activityFocus: "all",
+        ...dateRange,
       },
       ["activity:workspace:all"],
     );
   }
 
   if (
-    /^who (?:made|added|left) comments today[.?!]?$/i.test(rawMessage) ||
-    /^show(?: me)? who commented today[.?!]?$/i.test(rawMessage)
+    activityTest(rawMessage, String.raw`^who (?:made|added|left) comments`) ||
+    activityTest(rawMessage, String.raw`^show(?: me)? who commented`)
   ) {
     return candidate(
       "activity.workspace_report",
@@ -193,15 +215,17 @@ function resolveWorkspaceActivityIntent(
       0.92,
       {
         activityFocus: "comments",
+        ...dateRange,
       },
       ["activity:workspace:comments"],
     );
   }
 
   if (
-    /^who moved (?:clients|files|records|people) today[.?!]?$/i.test(rawMessage) ||
-    /^show(?: me)? who moved (?:clients|files|records|people) today[.?!]?$/i.test(
+    activityTest(rawMessage, String.raw`^who moved (?:clients|files|records|people)`) ||
+    activityTest(
       rawMessage,
+      String.raw`^show(?: me)? who moved (?:clients|files|records|people)`,
     )
   ) {
     return candidate(
@@ -210,14 +234,15 @@ function resolveWorkspaceActivityIntent(
       0.92,
       {
         activityFocus: "moves",
+        ...dateRange,
       },
       ["activity:workspace:moves"],
     );
   }
 
   if (
-    /^who created leads today[.?!]?$/i.test(rawMessage) ||
-    /^show(?: me)? who created leads today[.?!]?$/i.test(rawMessage)
+    activityTest(rawMessage, String.raw`^who created leads`) ||
+    activityTest(rawMessage, String.raw`^show(?: me)? who created leads`)
   ) {
     return candidate(
       "activity.workspace_report",
@@ -225,14 +250,17 @@ function resolveWorkspaceActivityIntent(
       0.92,
       {
         activityFocus: "creates",
+        ...dateRange,
       },
       ["activity:workspace:creates"],
     );
   }
 
   if (
-    /^show(?: me)? the activity timeline for today[.?!]?$/i.test(rawMessage) ||
-    /^show(?: me)? today's activity timeline[.?!]?$/i.test(rawMessage)
+    activityTest(rawMessage, String.raw`^show(?: me)? the activity timeline for`) ||
+    /^show(?: me)? (?:today's|yesterday's|this week's|last week's|this month's|last month's) activity timeline[.?!]?$/i.test(
+      rawMessage,
+    )
   ) {
     return candidate(
       "activity.workspace_report",
@@ -240,6 +268,7 @@ function resolveWorkspaceActivityIntent(
       0.9,
       {
         activityFocus: "timeline",
+        ...dateRange,
       },
       ["activity:workspace:timeline"],
     );
@@ -278,19 +307,45 @@ function resolveEmployeeActivityIntent(
   }
 
   const rawMessage = request.message.trim();
+  const dateRange = resolveActivityDateRangeFromMessage(
+    rawMessage,
+    request.nowIso,
+  );
+  const timelineTarget =
+    activityMatch(
+      rawMessage,
+      String.raw`^(?:show(?: me)?|give me)\s+(?:the )?activity timeline for\s+(.+?)`,
+    )?.[1]?.trim() ??
+    activityMatch(
+      rawMessage,
+      String.raw`^(?:show(?: me)?|give me)\s+(.+?)'?s activity timeline`,
+    )?.[1]?.trim();
+
+  if (timelineTarget && !TEAM_TARGETS.has(normalize(timelineTarget))) {
+    return candidate(
+      "activity.employee_report",
+      95,
+      0.91,
+      {
+        employeeName: normalizeEmployeeTarget(timelineTarget, request),
+        activityFocus: "timeline",
+        ...dateRange,
+      },
+      ["activity:employee:timeline"],
+    );
+  }
+
   const generalTarget =
-    rawMessage
-      .match(
-        /^(?:show(?: me)?|tell me|give me)\s+(?:everything|all activity|the full activity)\s+(.+?)\s+did today[.?!]?$/i,
-      )?.[1]
-      ?.trim() ??
-    rawMessage
-      .match(
-        /^(?:show(?: me)?|tell me|give me)\s+(.+?)'?s activity today[.?!]?$/i,
-      )?.[1]
-      ?.trim() ??
-    rawMessage.match(/^what exactly did (.+) do today[.?!]?$/i)?.[1]?.trim() ??
-    rawMessage.match(/^what did (.+) do today[.?!]?$/i)?.[1]?.trim();
+    activityMatch(
+      rawMessage,
+      String.raw`^(?:show(?: me)?|tell me|give me)\s+(?:everything|all activity|the full activity)\s+(.+?)\s+did`,
+    )?.[1]?.trim() ??
+    activityMatch(
+      rawMessage,
+      String.raw`^(?:show(?: me)?|tell me|give me)\s+(.+?)'?s activity`,
+    )?.[1]?.trim() ??
+    activityMatch(rawMessage, String.raw`^what exactly did (.+) do`)?.[1]?.trim() ??
+    activityMatch(rawMessage, String.raw`^what did (.+) do`)?.[1]?.trim();
 
   if (generalTarget && !TEAM_TARGETS.has(normalize(generalTarget))) {
     return candidate(
@@ -300,18 +355,16 @@ function resolveEmployeeActivityIntent(
       {
         employeeName: normalizeEmployeeTarget(generalTarget, request),
         activityFocus: "all",
+        ...dateRange,
       },
       ["activity:employee:all"],
     );
   }
 
   const commentsTarget =
-    rawMessage
-      .match(/^what comments did (.+) make today[.?!]?$/i)?.[1]
-      ?.trim() ??
-    rawMessage
-      .match(/^(?:show(?: me)?|list)\s+(.+?)'?s comments today[.?!]?$/i)?.[1]
-      ?.trim();
+    activityMatch(rawMessage, String.raw`^what comments did (.+) make`)?.[1]?.trim() ??
+    activityMatch(rawMessage, String.raw`^(?:show(?: me)?|list)\s+(.+?)'?s comments`)?.[1]?.trim() ??
+    activityMatch(rawMessage, String.raw`^how many comments did (.+) make`)?.[1]?.trim();
 
   if (commentsTarget && !TEAM_TARGETS.has(normalize(commentsTarget))) {
     return candidate(
@@ -321,20 +374,18 @@ function resolveEmployeeActivityIntent(
       {
         employeeName: normalizeEmployeeTarget(commentsTarget, request),
         activityFocus: "comments",
+        ...dateRange,
       },
       ["activity:employee:comments"],
     );
   }
 
   const movesTarget =
-    rawMessage
-      .match(
-        /^how many (?:clients|files|records|people) did (.+) move today[.?!]?$/i,
-      )?.[1]
-      ?.trim() ??
-    rawMessage
-      .match(/^(?:show(?: me)?|list)\s+(.+?)'?s moves today[.?!]?$/i)?.[1]
-      ?.trim();
+    activityMatch(
+      rawMessage,
+      String.raw`^how many (?:clients|files|records|people) did (.+) move`,
+    )?.[1]?.trim() ??
+    activityMatch(rawMessage, String.raw`^(?:show(?: me)?|list)\s+(.+?)'?s moves`)?.[1]?.trim();
 
   if (movesTarget && !TEAM_TARGETS.has(normalize(movesTarget))) {
     return candidate(
@@ -344,20 +395,19 @@ function resolveEmployeeActivityIntent(
       {
         employeeName: normalizeEmployeeTarget(movesTarget, request),
         activityFocus: "moves",
+        ...dateRange,
       },
       ["activity:employee:moves"],
     );
   }
 
   const createsTarget =
-    rawMessage
-      .match(/^what leads did (.+) create today[.?!]?$/i)?.[1]
-      ?.trim() ??
-    rawMessage
-      .match(
-        /^(?:show(?: me)?|list)\s+(.+?)'?s created leads today[.?!]?$/i,
-      )?.[1]
-      ?.trim();
+    activityMatch(rawMessage, String.raw`^what leads did (.+) create`)?.[1]?.trim() ??
+    activityMatch(
+      rawMessage,
+      String.raw`^(?:show(?: me)?|list)\s+(.+?)'?s created leads`,
+    )?.[1]?.trim() ??
+    activityMatch(rawMessage, String.raw`^how many leads did (.+) create`)?.[1]?.trim();
 
   if (createsTarget && !TEAM_TARGETS.has(normalize(createsTarget))) {
     return candidate(
@@ -367,8 +417,105 @@ function resolveEmployeeActivityIntent(
       {
         employeeName: normalizeEmployeeTarget(createsTarget, request),
         activityFocus: "creates",
+        ...dateRange,
       },
       ["activity:employee:creates"],
+    );
+  }
+
+  return null;
+}
+
+function resolveRecordActivityIntent(
+  request: IntentPlannerRequest,
+): IntentCandidate | null {
+  if (request.actor.roleName !== "admin") {
+    return null;
+  }
+
+  const rawMessage = request.message.trim();
+  const dateRange = resolveActivityDateRangeFromMessage(
+    rawMessage,
+    request.nowIso,
+  );
+  const timelineQuery =
+    activityMatch(
+      rawMessage,
+      String.raw`^(?:show(?: me)?|give me)\s+(?:the )?(?:activity )?timeline (?:for|on)\s+(.+?)`,
+    )?.[1]?.trim();
+
+  if (timelineQuery) {
+    return buildRecordActivityCandidate(
+      timelineQuery,
+      request,
+      "timeline",
+      94,
+      0.9,
+      "Which client should I check the timeline for?",
+      "activity:record:timeline",
+      dateRange,
+    );
+  }
+
+  const generalQuery =
+    activityMatch(
+      rawMessage,
+      String.raw`^(?:who (?:worked on|touched)|who has touched|show(?: me)? activity on|what happened on|what changed on)\s+(.+?)`,
+    )?.[1]?.trim() ??
+    activityMatch(
+      rawMessage,
+      String.raw`^(?:show(?: me)?|give me) (?:the )?activity (?:for|on)\s+(.+?)`,
+    )?.[1]?.trim();
+
+  if (generalQuery) {
+    return buildRecordActivityCandidate(
+      generalQuery,
+      request,
+      "all",
+      93,
+      0.89,
+      "Which client should I check activity for?",
+      "activity:record:all",
+      dateRange,
+    );
+  }
+
+  const commentsQuery =
+    activityMatch(
+      rawMessage,
+      String.raw`^(?:who commented on|who left comments on|show(?: me)? comments on)\s+(.+?)`,
+    )?.[1]?.trim();
+
+  if (commentsQuery) {
+    return buildRecordActivityCandidate(
+      commentsQuery,
+      request,
+      "comments",
+      94,
+      0.9,
+      "Which client should I check comments for?",
+      "activity:record:comments",
+      dateRange,
+    );
+  }
+
+  const movesQuery =
+    activityMatch(
+      rawMessage,
+      String.raw`^who moved (this (?:client|file|lead|record))`,
+    )?.[1]?.trim() ??
+    activityMatch(rawMessage, String.raw`^who moved\s+(.+?)`)?.[1]?.trim();
+
+  if (movesQuery && !/^(?:clients|files|records|people)$/i.test(movesQuery)) {
+    return buildRecordActivityCandidate(
+      movesQuery,
+      request,
+      "moves",
+      92,
+      0.87,
+      "Which client should I check moves for?",
+      "activity:record:moves",
+      dateRange,
     );
   }
 
@@ -1154,6 +1301,51 @@ function normalizeEmployeeTarget(
   return normalized === "i" || normalized === "me"
     ? request.actor.displayName
     : value.trim();
+}
+
+function buildRecordActivityCandidate(
+  value: string,
+  request: IntentPlannerRequest,
+  focus: "all" | "comments" | "moves" | "timeline",
+  score: number,
+  confidence: number,
+  clarificationQuestion: string,
+  signal: string,
+  dateRange: { dateStart: string; dateEnd: string; dateLabel: string },
+) {
+  const useActiveRecordContext = isContextPointer(value);
+  if (useActiveRecordContext && !request.hasActiveRecordContext) {
+    return candidate(
+      "activity.record_report",
+      score,
+      confidence - 0.05,
+      {
+        useActiveRecordContext: true,
+        activityFocus: focus,
+        ...dateRange,
+      },
+      [`${signal}:context`],
+      clarificationQuestion,
+    );
+  }
+
+  return candidate(
+    "activity.record_report",
+    score,
+    confidence,
+    useActiveRecordContext
+      ? {
+          useActiveRecordContext: true,
+          activityFocus: focus,
+          ...dateRange,
+        }
+      : {
+          recordQuery: value.trim(),
+          activityFocus: focus,
+          ...dateRange,
+        },
+    [useActiveRecordContext ? `${signal}:context` : signal],
+  );
 }
 
 function normalize(input: string) {
