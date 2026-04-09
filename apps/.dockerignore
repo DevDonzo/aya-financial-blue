@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/.cache
+**/.DS_Store
+**/coverage
+**/tmp
+**/*.log
+librechat/data-node
+librechat/logs
+librechat/uploads
+librechat/meili_data_v1.35.1
+aya-ops-bot/data

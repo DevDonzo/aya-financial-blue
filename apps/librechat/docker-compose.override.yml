@@ -1,0 +1,64 @@
+services:
+  api:
+    image: librechat-local:dev
+    build:
+      context: ..
+      dockerfile: librechat/Dockerfile.combined
+      args:
+        LIBRECHAT_NODE_MAX_OLD_SPACE_SIZE: ${LIBRECHAT_NODE_MAX_OLD_SPACE_SIZE:-3072}
+    mem_limit: 1400m
+    depends_on:
+      - mongodb
+    environment:
+      AYA_PORT: 3010
+      AYA_DATA_DIR: /aya/data
+      AYA_API_URL: http://127.0.0.1:3010/mcp
+      BLUE_API_URL: ${BLUE_API_URL:-}
+      BLUE_AUTH_TOKEN: ${BLUE_AUTH_TOKEN:-}
+      BLUE_CLIENT_ID: ${BLUE_CLIENT_ID:-}
+      BLUE_COMPANY_ID: ${BLUE_COMPANY_ID:-}
+      BLUE_WORKSPACE_ID: ${BLUE_WORKSPACE_ID:-cmn524yr800e101mh7kn44mhf}
+      BLUE_WEBHOOK_PUBLIC_URL: ${BLUE_WEBHOOK_PUBLIC_URL:-}
+      BLUE_WEBHOOK_SECRET: ${BLUE_WEBHOOK_SECRET:-}
+      AUTH_BOOTSTRAP_KEY: ${AUTH_BOOTSTRAP_KEY:-aya-dev-bootstrap-key}
+      ALLOW_SYSTEM_BLUE_WRITE_FALLBACK: ${ALLOW_SYSTEM_BLUE_WRITE_FALLBACK:-true}
+      AUDIT_STDOUT_MODE: ${AUDIT_STDOUT_MODE:-metadata}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LIBRECHAT_MONGO_URI: mongodb://mongodb:27017/LibreChat
+      LIBRECHAT_MONGO_DB_NAME: LibreChat
+    ports:
+      - "3010:3010"
+    volumes:
+      - type: bind
+        source: ./librechat.yaml
+        target: /app/librechat.yaml
+      - aya-data:/aya/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:3010/health >/dev/null && curl -fsS http://127.0.0.1:3080 >/dev/null",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+  mongodb:
+    mem_limit: 384m
+    ports:
+      - "27018:27017"
+  meilisearch:
+    mem_limit: 256m
+    profiles:
+      - optional
+  vectordb:
+    mem_limit: 256m
+    profiles:
+      - optional
+  rag_api:
+    mem_limit: 256m
+    profiles:
+      - optional
+
+volumes:
+  aya-data:
