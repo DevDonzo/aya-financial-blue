@@ -68,8 +68,10 @@ const INTENT_RESOLVERS: Array<
   resolveIdentityIntent,
   resolveReportingOverviewIntent,
   resolveReportingQuestionIntent,
+  resolveWorkspaceActivityIntent,
   resolveTeamSummaryIntent,
   resolveNoActivityIntent,
+  resolveEmployeeActivityIntent,
   resolveEmployeeSummaryIntent,
   resolveFollowUpIntent,
   resolveWorkloadIntent,
@@ -153,6 +155,99 @@ function resolveTeamSummaryIntent(
   return null;
 }
 
+function resolveWorkspaceActivityIntent(
+  request: IntentPlannerRequest,
+): IntentCandidate | null {
+  if (request.actor.roleName !== "admin") {
+    return null;
+  }
+
+  const rawMessage = request.message.trim();
+  const message = normalize(rawMessage);
+
+  if (
+    message === "what changed today" ||
+    message === "what happened today" ||
+    message === "show me workspace activity today" ||
+    message === "show me all activity today" ||
+    message === "show me everything that happened today"
+  ) {
+    return candidate(
+      "activity.workspace_report",
+      96,
+      0.92,
+      {
+        activityFocus: "all",
+      },
+      ["activity:workspace:all"],
+    );
+  }
+
+  if (
+    /^who (?:made|added|left) comments today[.?!]?$/i.test(rawMessage) ||
+    /^show(?: me)? who commented today[.?!]?$/i.test(rawMessage)
+  ) {
+    return candidate(
+      "activity.workspace_report",
+      96,
+      0.92,
+      {
+        activityFocus: "comments",
+      },
+      ["activity:workspace:comments"],
+    );
+  }
+
+  if (
+    /^who moved (?:clients|files|records|people) today[.?!]?$/i.test(rawMessage) ||
+    /^show(?: me)? who moved (?:clients|files|records|people) today[.?!]?$/i.test(
+      rawMessage,
+    )
+  ) {
+    return candidate(
+      "activity.workspace_report",
+      96,
+      0.92,
+      {
+        activityFocus: "moves",
+      },
+      ["activity:workspace:moves"],
+    );
+  }
+
+  if (
+    /^who created leads today[.?!]?$/i.test(rawMessage) ||
+    /^show(?: me)? who created leads today[.?!]?$/i.test(rawMessage)
+  ) {
+    return candidate(
+      "activity.workspace_report",
+      96,
+      0.92,
+      {
+        activityFocus: "creates",
+      },
+      ["activity:workspace:creates"],
+    );
+  }
+
+  if (
+    /^show(?: me)? the activity timeline for today[.?!]?$/i.test(rawMessage) ||
+    /^show(?: me)? today's activity timeline[.?!]?$/i.test(rawMessage)
+  ) {
+    return candidate(
+      "activity.workspace_report",
+      95,
+      0.9,
+      {
+        activityFocus: "timeline",
+      },
+      ["activity:workspace:timeline"],
+    );
+  }
+
+  return null;
+}
+
 function resolveNoActivityIntent(
   request: IntentPlannerRequest,
 ): IntentCandidate | null {
@@ -169,6 +264,111 @@ function resolveNoActivityIntent(
       0.84,
       {},
       ["summary:no-activity"],
+    );
+  }
+
+  return null;
+}
+
+function resolveEmployeeActivityIntent(
+  request: IntentPlannerRequest,
+): IntentCandidate | null {
+  if (request.actor.roleName !== "admin") {
+    return null;
+  }
+
+  const rawMessage = request.message.trim();
+  const generalTarget =
+    rawMessage
+      .match(
+        /^(?:show(?: me)?|tell me|give me)\s+(?:everything|all activity|the full activity)\s+(.+?)\s+did today[.?!]?$/i,
+      )?.[1]
+      ?.trim() ??
+    rawMessage
+      .match(
+        /^(?:show(?: me)?|tell me|give me)\s+(.+?)'?s activity today[.?!]?$/i,
+      )?.[1]
+      ?.trim() ??
+    rawMessage.match(/^what exactly did (.+) do today[.?!]?$/i)?.[1]?.trim() ??
+    rawMessage.match(/^what did (.+) do today[.?!]?$/i)?.[1]?.trim();
+
+  if (generalTarget && !TEAM_TARGETS.has(normalize(generalTarget))) {
+    return candidate(
+      "activity.employee_report",
+      94,
+      0.9,
+      {
+        employeeName: normalizeEmployeeTarget(generalTarget, request),
+        activityFocus: "all",
+      },
+      ["activity:employee:all"],
+    );
+  }
+
+  const commentsTarget =
+    rawMessage
+      .match(/^what comments did (.+) make today[.?!]?$/i)?.[1]
+      ?.trim() ??
+    rawMessage
+      .match(/^(?:show(?: me)?|list)\s+(.+?)'?s comments today[.?!]?$/i)?.[1]
+      ?.trim();
+
+  if (commentsTarget && !TEAM_TARGETS.has(normalize(commentsTarget))) {
+    return candidate(
+      "activity.employee_report",
+      95,
+      0.91,
+      {
+        employeeName: normalizeEmployeeTarget(commentsTarget, request),
+        activityFocus: "comments",
+      },
+      ["activity:employee:comments"],
+    );
+  }
+
+  const movesTarget =
+    rawMessage
+      .match(
+        /^how many (?:clients|files|records|people) did (.+) move today[.?!]?$/i,
+      )?.[1]
+      ?.trim() ??
+    rawMessage
+      .match(/^(?:show(?: me)?|list)\s+(.+?)'?s moves today[.?!]?$/i)?.[1]
+      ?.trim();
+
+  if (movesTarget && !TEAM_TARGETS.has(normalize(movesTarget))) {
+    return candidate(
+      "activity.employee_report",
+      95,
+      0.91,
+      {
+        employeeName: normalizeEmployeeTarget(movesTarget, request),
+        activityFocus: "moves",
+      },
+      ["activity:employee:moves"],
+    );
+  }
+
+  const createsTarget =
+    rawMessage
+      .match(/^what leads did (.+) create today[.?!]?$/i)?.[1]
+      ?.trim() ??
+    rawMessage
+      .match(
+        /^(?:show(?: me)?|list)\s+(.+?)'?s created leads today[.?!]?$/i,
+      )?.[1]
+      ?.trim();
+
+  if (createsTarget && !TEAM_TARGETS.has(normalize(createsTarget))) {
+    return candidate(
+      "activity.employee_report",
+      95,
+      0.91,
+      {
+        employeeName: normalizeEmployeeTarget(createsTarget, request),
+        activityFocus: "creates",
+      },
+      ["activity:employee:creates"],
     );
   }
 
@@ -944,6 +1144,16 @@ function isContextPointer(value: string | undefined) {
 
 function isRoutingExclusion(value: string) {
   return ROUTING_EXCLUSIONS.has(normalize(value));
+}
+
+function normalizeEmployeeTarget(
+  value: string,
+  request: IntentPlannerRequest,
+) {
+  const normalized = normalize(value);
+  return normalized === "i" || normalized === "me"
+    ? request.actor.displayName
+    : value.trim();
 }
 
 function normalize(input: string) {

@@ -22,11 +22,13 @@ import {
   createClientRecord,
   getClientComments,
   getClientDetail,
+  getEmployeeActivityReport,
   getEmployeeDaySummary,
   getEmployeeFollowUpQueue,
   getEmployeeWorkload,
   getReportingOverview,
   getTeamDaySummary,
+  getWorkspaceActivityReport,
   moveClientToStage,
   searchClients,
 } from "./actions.js";
@@ -293,6 +295,8 @@ function enforceIntentPermissions(actor: EmployeeIdentity, plan: IntentPlan) {
   }
 
   if (
+    plan.intent === "activity.employee_report" ||
+    plan.intent === "activity.workspace_report" ||
     plan.intent === "summary.team_day" ||
     plan.intent === "summary.no_activity_day" ||
     plan.intent === "reporting.overview" ||
@@ -331,6 +335,61 @@ async function executePlan(input: {
   const { actor, transport, blueAuth, plan } = input;
 
   switch (plan.intent) {
+    case "activity.employee_report": {
+      const focus =
+        plan.parameters.activityFocus === "comments" ||
+        plan.parameters.activityFocus === "moves" ||
+        plan.parameters.activityFocus === "creates" ||
+        plan.parameters.activityFocus === "timeline"
+          ? plan.parameters.activityFocus
+          : "all";
+      const result = await getEmployeeActivityReport({
+        employeeId:
+          typeof plan.parameters.employeeId === "string"
+            ? plan.parameters.employeeId
+            : undefined,
+        employeeEmail:
+          typeof plan.parameters.employeeEmail === "string"
+            ? plan.parameters.employeeEmail
+            : undefined,
+        employeeName:
+          typeof plan.parameters.employeeName === "string"
+            ? plan.parameters.employeeName
+            : undefined,
+        date:
+          typeof plan.parameters.date === "string"
+            ? plan.parameters.date
+            : undefined,
+        focus,
+        transport,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "activity.workspace_report": {
+      const focus =
+        plan.parameters.activityFocus === "comments" ||
+        plan.parameters.activityFocus === "moves" ||
+        plan.parameters.activityFocus === "creates" ||
+        plan.parameters.activityFocus === "timeline"
+          ? plan.parameters.activityFocus
+          : "all";
+      const result = await getWorkspaceActivityReport({
+        date:
+          typeof plan.parameters.date === "string"
+            ? plan.parameters.date
+            : undefined,
+        focus,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
     case "identity.self": {
       const data = {
         employeeId: actor.employeeId,
@@ -737,6 +796,8 @@ function getAuditAdapter(intent: IntentName) {
   switch (intent) {
     case "identity.self":
     case "summary.employee_day":
+    case "activity.employee_report":
+    case "activity.workspace_report":
     case "summary.team_day":
     case "summary.no_activity_day":
       return "local";
@@ -768,6 +829,9 @@ function getAuditCommandName(intent: IntentName) {
       return "getReportingOverview";
     case "reporting.question":
       return "answerReportingQuestion";
+    case "activity.employee_report":
+    case "activity.workspace_report":
+      return "employeeActivityReport";
     default:
       return intent;
   }

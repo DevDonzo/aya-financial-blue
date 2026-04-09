@@ -9,10 +9,12 @@ import {
   createClientRecord,
   getClientComments,
   getClientDetail,
+  getEmployeeActivityReport,
   getEmployeeDaySummary,
   getEmployeeFollowUpQueue,
   getEmployeeWorkload,
   getTeamDaySummary,
+  getWorkspaceActivityReport,
   moveClientToStage,
   resolveActorIdentity,
   runAyaMessageTool,
@@ -293,6 +295,68 @@ function createAyaMcpServer() {
         recordQuery: clientQuery,
         actor,
         transport: "mcp",
+      });
+
+      return {
+        content: [{ type: "text", text: result.responseText }],
+        structuredContent: toStructuredContent(result),
+      };
+    },
+  );
+
+  server.registerTool(
+    "aya_get_employee_activity_report",
+    {
+      title: "Employee Activity Report",
+      description:
+        "Admin-only attributed Aya activity report for one internal employee. Use this when an admin asks exactly what someone did, what comments they made, how many clients they moved, what leads they created, or to see a detailed activity timeline for a day.",
+      inputSchema: {
+        employeeId: z.string().optional(),
+        employeeEmail: z.string().email().optional(),
+        employeeName: z.string().optional(),
+        date: z.string().optional(),
+        focus: z
+          .enum(["all", "comments", "moves", "creates", "timeline"])
+          .default("all"),
+      },
+    },
+    async ({ employeeId, employeeEmail, employeeName, date, focus }, extra) => {
+      await requireAdminToolActor(extra.requestInfo?.headers);
+      const result = await getEmployeeActivityReport({
+        employeeId,
+        employeeEmail,
+        employeeName,
+        date,
+        focus,
+      });
+      return {
+        content: [{ type: "text", text: result.responseText }],
+        structuredContent: toStructuredContent(result),
+      };
+    },
+  );
+
+  server.registerTool(
+    "aya_get_workspace_activity_report",
+    {
+      title: "Get Workspace Activity Report",
+      description:
+        "Admin-only audit-backed workspace activity report for the allowed Aya workspace `03 - AYA x Hamza/ AI`. Use this when admins ask what happened today, who moved clients, who made comments, who created leads, or for a workspace activity timeline.",
+      inputSchema: {
+        date: z
+          .string()
+          .optional()
+          .describe("Optional date in YYYY-MM-DD format. Defaults to today."),
+        focus: z
+          .enum(["all", "comments", "moves", "creates", "timeline"])
+          .default("all"),
+      },
+    },
+    async ({ date, focus }, extra) => {
+      await requireAdminToolActor(extra.requestInfo?.headers);
+      const result = await getWorkspaceActivityReport({
+        date,
+        focus,
       });
 
       return {

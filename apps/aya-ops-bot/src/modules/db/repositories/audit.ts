@@ -193,6 +193,68 @@ export async function getAdminDashboardLogDetail(id: string) {
     .executeTakeFirst();
 }
 
+export async function listBotAuditLogsForEmployeeDay(input: {
+  employeeId: string;
+  dateIso: string;
+  limit?: number;
+}) {
+  return await db
+    .selectFrom("bot_audit_logs as l")
+    .leftJoin("employees as e", "e.id", "l.employee_id")
+    .select([
+      "l.id",
+      "l.created_at",
+      "l.employee_id",
+      "e.display_name",
+      "e.role_name",
+      "l.transport",
+      "l.detected_intent",
+      "l.adapter",
+      "l.command_name",
+      "l.command_args",
+      "l.outcome",
+      "l.inbound_text",
+      "l.response_text",
+      "l.request_json",
+      "l.response_json",
+    ])
+    .where("l.employee_id", "=", input.employeeId)
+    .where(sql`substr(l.created_at, 1, 10)`, "=", input.dateIso)
+    .orderBy("l.created_at", "desc")
+    .limit(input.limit ?? 250)
+    .execute();
+}
+
+export async function listBotAuditLogsForDay(input: {
+  dateIso: string;
+  limit?: number;
+}) {
+  return await db
+    .selectFrom("bot_audit_logs as l")
+    .leftJoin("employees as e", "e.id", "l.employee_id")
+    .select([
+      "l.id",
+      "l.created_at",
+      "l.employee_id",
+      "e.display_name",
+      "e.role_name",
+      "l.transport",
+      "l.detected_intent",
+      "l.adapter",
+      "l.command_name",
+      "l.command_args",
+      "l.outcome",
+      "l.inbound_text",
+      "l.response_text",
+      "l.request_json",
+      "l.response_json",
+    ])
+    .where(sql`substr(l.created_at, 1, 10)`, "=", input.dateIso)
+    .orderBy("l.created_at", "desc")
+    .limit(input.limit ?? 1000)
+    .execute();
+}
+
 function summarizePlannerOverview(
   rows: Array<{
     detected_intent: string | null;

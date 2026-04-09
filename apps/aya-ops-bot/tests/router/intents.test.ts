@@ -8,6 +8,13 @@ const actor = {
   blueUserId: "emp_1",
 };
 
+const adminActor = {
+  employeeId: "admin_1",
+  displayName: "Admin User",
+  blueUserId: "admin_1",
+  roleName: "admin",
+} as const;
+
 describe("detectIntent", () => {
   it("matches workload requests", () => {
     const result = detectIntent({
@@ -168,6 +175,56 @@ describe("detectIntent", () => {
         recordQuery: "Sheraz",
         detailMode: "briefing",
         briefingFocus: "handoff",
+      },
+      requiresClarification: false,
+    });
+  });
+
+  it("maps admin exact-activity requests to the employee activity report", () => {
+    const result = planEmployeeIntent({
+      actor: adminActor,
+      message: "what did Sheraz do today",
+      nowIso: new Date().toISOString(),
+    });
+
+    expect(result).toMatchObject({
+      intent: "activity.employee_report",
+      parameters: {
+        employeeName: "Sheraz",
+        activityFocus: "all",
+      },
+      requiresClarification: false,
+    });
+  });
+
+  it("maps admin comment-activity requests to the employee activity report", () => {
+    const result = planEmployeeIntent({
+      actor: adminActor,
+      message: "what comments did Sheraz make today",
+      nowIso: new Date().toISOString(),
+    });
+
+    expect(result).toMatchObject({
+      intent: "activity.employee_report",
+      parameters: {
+        employeeName: "Sheraz",
+        activityFocus: "comments",
+      },
+      requiresClarification: false,
+    });
+  });
+
+  it("maps admin workspace move-activity requests to the workspace activity report", () => {
+    const result = planEmployeeIntent({
+      actor: adminActor,
+      message: "who moved clients today",
+      nowIso: new Date().toISOString(),
+    });
+
+    expect(result).toMatchObject({
+      intent: "activity.workspace_report",
+      parameters: {
+        activityFocus: "moves",
       },
       requiresClarification: false,
     });

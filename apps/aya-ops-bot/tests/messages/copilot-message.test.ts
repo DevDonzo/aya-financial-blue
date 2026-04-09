@@ -486,6 +486,256 @@ describe("Aya copilot message flow", () => {
     }
   });
 
+  it("returns an admin activity report with exact comments, moves, and created leads", async () => {
+    const env = createTestEnvironment();
+
+    try {
+      const {
+        createId,
+        ensureEmployee,
+        initializeDatabase,
+        insertBotAuditLog,
+      } = await import("../../src/db.js");
+
+      await initializeDatabase();
+      await ensureEmployee({
+        employeeId: "admin_1",
+        displayName: "Admin User",
+        email: "admin@example.com",
+        roleName: "admin",
+      });
+      await ensureEmployee({
+        employeeId: "employee_1",
+        displayName: "Hamza Paracha",
+        email: "hamza@ayafinancial.com",
+        roleName: "employee",
+      });
+
+      await insertBotAuditLog({
+        id: createId("audit"),
+        employeeId: "employee_1",
+        transport: "web",
+        inboundText: "add a note to this client: Docs requested from client",
+        detectedIntent: "comments.create",
+        adapter: "aya-service",
+        commandName: "createComment",
+        outcome: "success",
+        responseText: "Added comment to Hamza Client.",
+        responseJson: {
+          data: {
+            recordTitle: "Hamza Client",
+            text: "Docs requested from client",
+          },
+        },
+      });
+      await insertBotAuditLog({
+        id: createId("audit"),
+        employeeId: "employee_1",
+        transport: "web",
+        inboundText: "move this to underwriting",
+        detectedIntent: "records.move",
+        adapter: "aya-service",
+        commandName: "moveTodo",
+        outcome: "success",
+        responseText: "Moved Hamza Client to Underwriting.",
+        responseJson: {
+          data: {
+            recordTitle: "Hamza Client",
+            targetListTitle: "Underwriting",
+          },
+        },
+      });
+      await insertBotAuditLog({
+        id: createId("audit"),
+        employeeId: "employee_1",
+        transport: "web",
+        inboundText: "create a new lead named Aya QA Local",
+        detectedIntent: "records.create",
+        adapter: "aya-service",
+        commandName: "createTodo",
+        outcome: "success",
+        responseText: "Created Aya QA Local in Leads.",
+        responseJson: {
+          data: {
+            recordTitle: "Aya QA Local",
+            listTitle: "Leads",
+          },
+        },
+      });
+      await insertBotAuditLog({
+        id: createId("audit"),
+        employeeId: "employee_1",
+        transport: "web",
+        inboundText: "show me Hamza",
+        detectedIntent: "records.detail",
+        adapter: "aya-service",
+        commandName: "getBlueRecordDetail",
+        outcome: "success",
+        responseText: "Hamza Client is in Leads. Status: Active.",
+        responseJson: {
+          data: {
+            recordTitle: "Hamza Client",
+          },
+        },
+      });
+
+      const { handleInboundMessage } = await import(
+        "../../src/messages/handle-message.js"
+      );
+
+      const response = await handleInboundMessage({
+        actorEmployeeId: "admin_1",
+        message: "show me everything Hamza did today",
+      });
+
+      expect(response).toMatchObject({
+        matched: true,
+        intent: "activity.employee_report",
+      });
+      expect(response.responseText).toContain("Hamza Paracha had 4 Aya interactions");
+      expect(response.responseText).toContain(
+        "Writes: 3 | Reads: 1 | Comments: 1 | Moves: 1 | Leads created: 1",
+      );
+      expect(response.responseText).toContain("Exact comments:");
+      expect(response.responseText).toContain(
+        "commented on Hamza Client: Docs requested from client",
+      );
+      expect(response.responseText).toContain("Client moves:");
+      expect(response.responseText).toContain(
+        "moved Hamza Client to Underwriting",
+      );
+      expect(response.responseText).toContain("Leads created:");
+      expect(response.responseText).toContain("created Aya QA Local in Leads");
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it("returns an admin workspace report with employee leaders and exact moves", async () => {
+    const env = createTestEnvironment();
+
+    try {
+      const { ensureEmployee, initializeDatabase, insertBotAuditLog, createId } =
+        await import("../../src/db.js");
+
+      await initializeDatabase();
+      await ensureEmployee({
+        employeeId: "admin_1",
+        displayName: "Admin User",
+        email: "admin@ayafinancial.com",
+        roleName: "admin",
+      });
+      await ensureEmployee({
+        employeeId: "employee_1",
+        displayName: "Hamza Paracha",
+        email: "hamza@ayafinancial.com",
+        roleName: "employee",
+      });
+      await ensureEmployee({
+        employeeId: "employee_2",
+        displayName: "Sheraz Khan",
+        email: "sheraz@ayafinancial.com",
+        roleName: "employee",
+      });
+
+      await insertBotAuditLog({
+        id: createId("audit"),
+        employeeId: "employee_1",
+        transport: "web",
+        inboundText: "move this to underwriting",
+        detectedIntent: "records.move",
+        adapter: "aya-service",
+        commandName: "moveTodo",
+        outcome: "success",
+        responseText: "Moved Hamza Client to Underwriting.",
+        responseJson: {
+          data: {
+            recordTitle: "Hamza Client",
+            targetListTitle: "Underwriting",
+          },
+        },
+      });
+      await insertBotAuditLog({
+        id: createId("audit"),
+        employeeId: "employee_1",
+        transport: "web",
+        inboundText: "add note to this client: Docs requested",
+        detectedIntent: "comments.create",
+        adapter: "aya-service",
+        commandName: "createComment",
+        outcome: "success",
+        responseText: "Added comment to Hamza Client.",
+        responseJson: {
+          data: {
+            recordTitle: "Hamza Client",
+            text: "Docs requested",
+          },
+        },
+      });
+      await insertBotAuditLog({
+        id: createId("audit"),
+        employeeId: "employee_2",
+        transport: "web",
+        inboundText: "move this to docs received",
+        detectedIntent: "records.move",
+        adapter: "aya-service",
+        commandName: "moveTodo",
+        outcome: "success",
+        responseText: "Moved Sheraz Client to Docs Received.",
+        responseJson: {
+          data: {
+            recordTitle: "Sheraz Client",
+            targetListTitle: "Docs Received",
+          },
+        },
+      });
+      await insertBotAuditLog({
+        id: createId("audit"),
+        employeeId: "employee_2",
+        transport: "web",
+        inboundText: "create a new lead named Aya Workspace Test",
+        detectedIntent: "records.create",
+        adapter: "aya-service",
+        commandName: "createTodo",
+        outcome: "success",
+        responseText: "Created Aya Workspace Test in Leads.",
+        responseJson: {
+          data: {
+            recordTitle: "Aya Workspace Test",
+            listTitle: "Leads",
+          },
+        },
+      });
+
+      const { handleInboundMessage } = await import(
+        "../../src/messages/handle-message.js"
+      );
+
+      const response = await handleInboundMessage({
+        actorEmployeeId: "admin_1",
+        message: "who moved clients today",
+      });
+
+      expect(response).toMatchObject({
+        matched: true,
+        intent: "activity.workspace_report",
+      });
+      expect(response.responseText).toContain("Workspace moves for");
+      expect(response.responseText).toContain("Top movers:");
+      expect(response.responseText).toContain("Hamza Paracha (1)");
+      expect(response.responseText).toContain("Sheraz Khan (1)");
+      expect(response.responseText).toContain("Exact client moves:");
+      expect(response.responseText).toContain(
+        "Hamza Paracha: moved Hamza Client to Underwriting",
+      );
+      expect(response.responseText).toContain(
+        "Sheraz Khan: moved Sheraz Client to Docs Received",
+      );
+    } finally {
+      env.cleanup();
+    }
+  });
+
   it("moves the active client context through the shared execution service", async () => {
     const env = createTestEnvironment();
 

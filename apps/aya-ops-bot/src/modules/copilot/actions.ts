@@ -3,6 +3,7 @@ import {
   ValidationError,
 } from "../../app/errors.js";
 import { getBlueRecordDetail } from "../../blue/record-detail.js";
+import { listBotAuditLogsForDay, listBotAuditLogsForEmployeeDay } from "../../db.js";
 import {
   getIndexedRecord,
   resolveListQuery,
@@ -41,6 +42,12 @@ import {
   buildClientBriefingInsights,
   buildClientDetailResponseText,
 } from "./record-briefing.js";
+import {
+  buildEmployeeActivityReport,
+  type EmployeeActivityFocus,
+  buildWorkspaceActivityReport,
+  type WorkspaceActivityFocus,
+} from "./admin-activity-report.js";
 
 const BLUE_WRITE_AUTH_REJECTED_MESSAGE =
   "Blue rejected your saved personal Token ID and Secret for this write action. Open the Aya MCP server settings, re-save your Blue Token ID and Secret from Blue > Profile > API, then try again.";
@@ -209,6 +216,45 @@ export async function getEmployeeDaySummary(input: {
   const actor = await resolveActorOrThrow(input);
   const date = normalizeDate(input.date);
   return await buildEmployeeDaySummary(actor.employeeId, date);
+}
+
+export async function getEmployeeActivityReport(input: {
+  employeeId?: string;
+  employeeEmail?: string;
+  employeeName?: string;
+  date?: string;
+  focus?: EmployeeActivityFocus;
+  transport?: string;
+}) {
+  const actor = await resolveActorOrThrow(input);
+  const date = normalizeDate(input.date);
+  const rows = await listBotAuditLogsForEmployeeDay({
+    employeeId: actor.employeeId,
+    dateIso: date,
+  });
+
+  return buildEmployeeActivityReport({
+    employeeName: actor.displayName,
+    date,
+    rows,
+    focus: input.focus,
+  });
+}
+
+export async function getWorkspaceActivityReport(input: {
+  date?: string;
+  focus?: WorkspaceActivityFocus;
+}) {
+  const date = normalizeDate(input.date);
+  const rows = await listBotAuditLogsForDay({
+    dateIso: date,
+  });
+
+  return buildWorkspaceActivityReport({
+    date,
+    rows,
+    focus: input.focus,
+  });
 }
 
 export async function getTeamDaySummary(input: {

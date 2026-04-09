@@ -75,6 +75,9 @@ export const listAdminDashboardEmployeeActivity =
 export const listAdminDashboardRecentLogs =
   auditRepo.listAdminDashboardRecentLogs;
 export const getAdminDashboardLogDetail = auditRepo.getAdminDashboardLogDetail;
+export const listBotAuditLogsForEmployeeDay =
+  auditRepo.listBotAuditLogsForEmployeeDay;
+export const listBotAuditLogsForDay = auditRepo.listBotAuditLogsForDay;
 
 export const getBlueSyncState = syncStateRepo.getBlueSyncState;
 export const listBlueSyncStates = syncStateRepo.listBlueSyncStates;

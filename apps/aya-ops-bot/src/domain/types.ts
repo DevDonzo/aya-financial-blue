@@ -11,6 +11,8 @@ export type ActivitySource =
 
 export type IntentName =
   | "identity.self"
+  | "activity.employee_report"
+  | "activity.workspace_report"
   | "records.list_assigned"
   | "records.follow_up"
   | "records.search"
