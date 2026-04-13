@@ -117,6 +117,204 @@ The deployment assets already live here:
 
 This guide should match those files. If the compose stack changes, update this document with it.
 
+## Production Workspace Cutover
+
+The current safe workspace is a pilot workspace. In production, Aya should point at the real Blue workspace that contains the real employee membership and real client files.
+
+The cutover is not just "change the workspace ID and keep everything else."
+
+Recommended production cutover:
+
+1. Set `BLUE_WORKSPACE_ID` to the real production workspace ID.
+2. Use fresh Aya application data for the first production boot.
+3. Prefer a fresh LibreChat Mongo volume for production as well.
+4. Boot the stack.
+5. Let Aya run its startup syncs.
+6. Provision the first admin against the newly synced employee directory.
+7. Run the post-deploy smoke test before opening access to everyone.
+
+Why use fresh data:
+
+- Aya stores a local employee directory, identity links, workspace search cache, sync state, and audit/activity data.
+- If the old pilot workspace data is reused, names, identities, and cached records can remain mixed with the wrong workspace.
+
+In practice, a clean production cutover should treat the pilot workspace and the production workspace as separate Aya environments.
+
+## What Gets Ingested On First Boot
+
+Aya performs three different local syncs. These are not duplicates of Blue. They are Aya's local read model.
+
+1. Employee sync
+
+- Source: Blue workspace members for `BLUE_WORKSPACE_ID`
+- Code: [users-sync.ts](/Users/hparacha/AyaFinancial/Blue/apps/aya-ops-bot/src/blue/users-sync.ts)
+- Purpose:
+  - create Aya's local employee directory
+  - create identity links
+  - allow auth, role assignment, attribution, and admin reporting
+
+2. Workspace index sync
+
+- Source: Blue lists and records for `BLUE_WORKSPACE_ID`
+- Code: [workspace-index.ts](/Users/hparacha/AyaFinancial/Blue/apps/aya-ops-bot/src/blue/workspace-index.ts)
+- Purpose:
+  - fast search by client name, email, phone, and stage
+  - disambiguation and follow-up context
+  - low-latency routing without hitting Blue for every fuzzy lookup
+
+3. Activity ingest
+
+- Source: Blue activity feed for `BLUE_WORKSPACE_ID`
+- Code: [blue-ingest.ts](/Users/hparacha/AyaFinancial/Blue/apps/aya-ops-bot/src/activity/blue-ingest.ts)
+- Purpose:
+  - normalized local activity history
+  - employee/admin reporting
+  - timeline and audit-style questions over time ranges
+
+These syncs start automatically on boot in [server.ts](/Users/hparacha/AyaFinancial/Blue/apps/aya-ops-bot/src/server.ts) and continue via polling in [blue-poller.ts](/Users/hparacha/AyaFinancial/Blue/apps/aya-ops-bot/src/jobs/blue-poller.ts).
+
+So the answer to "why sync if Blue already has the data?" is:
+
+- Blue is the system of record.
+- Aya keeps a local operational read model so chat feels fast, context-aware, attributable, and reportable.
+
+Without that local read model:
+
+- search gets slower and more brittle
+- follow-up context gets weaker
+- admin reporting becomes much harder
+- every request depends on fresh multi-step Blue reads
+
+## Manual Sync vs Automatic Sync
+
+Manual sync is not the normal operating model.
+
+Normal operation:
+
+- Aya syncs employees on startup
+- Aya syncs the workspace index on startup
+- Aya polls for index/activity updates on an interval
+- webhooks can also push changes in when configured
+
+Manual sync is for:
+
+- first-time backfill
+- recovery after configuration changes
+- rehydrating after downtime
+- debugging stale cache situations
+
+Admin-only manual sync routes exist here:
+
+- [sync.ts](/Users/hparacha/AyaFinancial/Blue/apps/aya-ops-bot/src/routes/sync.ts)
+
+That means production does not depend on an operator clicking "sync" all day. The manual routes are recovery tools, not the main architecture.
+
+## Employee Membership Requirement
+
+Aya only syncs employees from the configured Blue workspace membership.
+
+That means:
+
+- if the production workspace contains all employees, Aya will ingest all of them automatically
+- if the workspace only contains a subset of employees, Aya will only know about that subset
+
+This is why the real production workspace matters so much. Aya auth and attribution depend on the workspace membership it can see.
+
+## Blank Email Risk
+
+In the current allowed workspace, Blue user emails are coming back blank from the workspace user query.
+
+That is not ideal.
+
+Why it matters:
+
+- email is the cleanest key for matching LibreChat users to Aya employees
+- blank emails force Aya to rely more on display-name matching
+- name-only matching is weaker for production identity resolution
+
+Likely causes:
+
+- the Blue workspace user data does not have emails populated for that workspace membership view
+- or the current Blue API/token scope does not expose them in this query
+
+The query Aya uses already requests `email` in [client.ts](/Users/hparacha/AyaFinancial/Blue/apps/aya-ops-bot/src/modules/blue/graphql/client.ts), so this is not because Aya forgot to ask for it.
+
+Production recommendation:
+
+1. Test the real production workspace membership response before cutover.
+2. Confirm whether `projectUserList.users.email` is populated there.
+3. If it is populated, use email-based identity resolution normally.
+4. If it is blank there too, plan for one of these:
+   - manual identity linking
+   - stricter name-based onboarding
+   - an alternate employee directory source for email mapping
+
+Blank emails are survivable, but they are not the ideal production identity setup.
+
+## Blue Write Attribution
+
+Today, Aya supports two write modes:
+
+1. Personal Blue credentials per employee
+
+- employee supplies Blue Token ID + Secret once
+- LibreChat stores them encrypted
+- Aya uses them for employee-triggered write actions
+- Blue attributes the write to the real employee
+
+2. System fallback
+
+- Aya uses the system credential when fallback is enabled
+- writes still happen
+- Blue may not attribute the write to the real employee in Blue itself
+
+Current code:
+
+- request auth normalization: [request-auth.ts](/Users/hparacha/AyaFinancial/Blue/apps/aya-ops-bot/src/modules/blue/request-auth.ts)
+
+Recommended production policy:
+
+- keep system fallback disabled for production writes unless there is a deliberate exception
+- require personal Blue credentials for employee-triggered writes that must show up in Blue as that employee
+
+## Do Employees Have To Paste API Keys?
+
+For strict Blue-side per-user attribution, some form of per-user Blue credential is required unless Blue supports delegated OAuth or another server-side impersonation flow.
+
+The current implementation uses personal Blue Token ID + Secret because it is the cleanest working path available in this codebase.
+
+The product problem is not the credential requirement itself. The problem is the UX.
+
+The better production UX is:
+
+- employee signs into Aya
+- Aya detects they are not connected for writes yet
+- Aya shows a simple "Connect Blue" settings flow
+- employee pastes Token ID + Secret once
+- Aya stores them encrypted
+- all future writes work normally
+
+That is better than exposing raw MCP settings as the main onboarding path.
+
+So:
+
+- no, I would not keep "open MCP settings and paste keys" as the long-term product UX
+- yes, I would keep personal Blue credentials underneath if Blue attribution is required and Blue does not offer a better delegated auth model
+
+## First Production Admin Bootstrap
+
+Once the production workspace employees are synced:
+
+1. call `/auth/provision` with the bootstrap key
+2. provision one synced employee as `admin`
+3. log into Aya admin with that employee name + password
+4. optionally provision additional admins
+
+Provisioning code:
+
+- [auth.ts](/Users/hparacha/AyaFinancial/Blue/apps/aya-ops-bot/src/routes/auth.ts)
+- [service.ts](/Users/hparacha/AyaFinancial/Blue/apps/aya-ops-bot/src/auth/service.ts)
+
 ## Services In The Stack
 
 The current Hostinger deployment includes:

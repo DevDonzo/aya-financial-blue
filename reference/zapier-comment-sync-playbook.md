@@ -214,30 +214,26 @@ Store the Blue webhook secret when you create it. Blue only returns the secret o
 
 ## Critical Validation Before You Promise Full 2-Way Update
 
-This is the one real caveat found during research.
+The local Blue live schema does expose the write path for editing an existing comment:
 
-The local Blue docs and generated live schema clearly show:
+- mutation name: `editComment`
+- input type: `EditCommentInput!`
+- fields: `id`, `html`, `text`
 
-- comment create exists
-- comment delete exists
-- comment webhooks exist for create, update, delete
+That means the remaining validation is operational, not conceptual:
 
-But the bundled schema/docs do not cleanly expose a top-level documented `updateComment` mutation by name.
+1. test `editComment` once against a real comment in your Blue account
+2. confirm the same credentials used for create/delete can also edit
 
-That means the first thing to validate tomorrow is:
+If that runtime test succeeds, proceed with the full two-way plan below.
 
-1. in the Blue GraphQL explorer or API docs, confirm the exact write operation for editing an existing comment
-2. test it manually once before building the update path in Zapier
-
-If Blue exposes a supported comment update mutation in your account, proceed with the full plan below.
-
-If Blue does not expose a usable API write path for editing comments, then true 2-way update is not available in a Zapier-only integration, even though create/delete and outbound update events exist. In that case:
+If it fails in your account for permission or tenancy reasons, then true 2-way update is not available for the current credentials even though the schema supports it. In that case:
 
 - create and delete can still sync
 - Blue -> HubSpot update can still happen because HubSpot note update is supported
-- HubSpot -> Blue update becomes blocked until the Blue update API path is confirmed
+- HubSpot -> Blue update becomes blocked until the Blue edit path works with your account
 
-Do not skip this check.
+Do not skip this runtime check.
 
 ## Zap 1: HubSpot -> Blue
 
@@ -377,14 +373,36 @@ If `comment_links` already has a row for this HubSpot note:
 
 1. compare the new hash against `last_hash`
 2. if same hash, stop
-3. otherwise update the existing Blue comment using the exact Blue update operation confirmed tomorrow
+3. otherwise update the existing Blue comment using `editComment`
 4. update the `comment_links` row:
    - `last_source = hubspot`
    - `last_hash = {new hash}`
    - `deleted = false`
    - `updated_at = now`
 
-Do not implement the update step until you have manually confirmed the Blue API write path for editing comments.
+Blue update request:
+
+```http
+POST https://api.blue.cc/graphql
+x-bloo-token-id: {BLUE_TOKEN_ID}
+x-bloo-token-secret: {BLUE_TOKEN_SECRET}
+x-bloo-company-id: {BLUE_COMPANY_ID}
+x-bloo-project-id: {BLUE_PROJECT_ID}
+Content-Type: application/json
+```
+
+```json
+{
+  "query": "mutation EditComment($input: EditCommentInput!) { editComment(input: $input) { id text html createdAt updatedAt } }",
+  "variables": {
+    "input": {
+      "id": "BLUE_COMMENT_ID",
+      "html": "<p>Updated from HubSpot</p>",
+      "text": "Updated from HubSpot"
+    }
+  }
+}
+```
 
 ### Delete Path
 
@@ -518,6 +536,7 @@ Content-Type: application/json
 Important:
 
 - `202` is the standard note-to-contact association in HubSpot examples
+- `190` is the standard note-to-company association
 - if your client object is `company` or a custom object, use the correct association type ID for that object instead
 - do not hardcode `202` until you confirm the client object type
 
@@ -662,19 +681,16 @@ Run these in order after the build:
 
 ## Risks To Watch
 
-### 1. Blue Comment Update API Path
+### 1. Blue Comment Update Runtime Check
 
-This is the main technical unknown found in research.
-
-The docs in this repo clearly support:
+The schema supports:
 
 - `createComment`
+- `editComment`
 - `deleteComment`
 - comment webhook events including `COMMENT_UPDATED`
 
-But they do not cleanly publish the exact mutation name for editing a comment.
-
-Validate this first.
+Still validate `editComment` once with your real credentials before you call the sync production-ready.
 
 ### 2. Wrong HubSpot Client Object Type
 
@@ -698,9 +714,9 @@ If clients exist across multiple Blue projects, you must store `blue_project_id`
 
 ## Best Practical Recommendation
 
-If the Blue comment update write path is confirmed tomorrow, build the full two-Zap design exactly as described above.
+If the Blue comment update runtime test succeeds, build the full two-Zap design exactly as described above.
 
-If the Blue comment update write path is not confirmed tomorrow, do not pretend the setup is true 2-way update sync. In that case:
+If the Blue comment update runtime test does not succeed, do not pretend the setup is true 2-way update sync. In that case:
 
 - you can still ship create/delete in both directions
 - you can still ship Blue -> HubSpot updates
@@ -759,6 +775,20 @@ mutation DeleteComment($id: String!) {
 }
 ```
 
+### Blue Edit Comment
+
+```graphql
+mutation EditComment($input: EditCommentInput!) {
+  editComment(input: $input) {
+    id
+    text
+    html
+    createdAt
+    updatedAt
+  }
+}
+```
+
 ## Sources
 
 Official and local references used for this playbook:
@@ -774,4 +804,3 @@ Official and local references used for this playbook:
 - Blue generated live schema for comment mutations: `reference/blue-api-live-schema/types/objects/Mutation.md`
 - Blue generated live schema for comment object: `reference/blue-api-live-schema/types/objects/Comment.md`
 - Blue generated live schema for comment subscription payload: `reference/blue-api-live-schema/types/objects/CommentSubscriptionPayload.md`
-

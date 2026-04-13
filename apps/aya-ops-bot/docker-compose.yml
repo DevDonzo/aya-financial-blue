@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: aya-ops-bot:latest
+    mem_limit: 256m
     environment:
       PORT: "3010"
       AYA_DATA_DIR: /app/data

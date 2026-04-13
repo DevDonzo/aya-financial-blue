@@ -206,6 +206,59 @@ export async function fetchWorkspaceUsers(workspaceId: string) {
   return items;
 }
 
+export async function fetchCompanyUsers(companyId: string) {
+  const items: BlueUser[] = [];
+  let skip = 0;
+  const pageSize = 100;
+
+  while (true) {
+    const data = await blueGraphqlRequest<{
+      companyUserList: {
+        users: BlueUser[];
+        totalCount: number;
+        pageInfo: {
+          hasNextPage: boolean;
+        };
+      };
+    }>(
+      `
+        query CompanyUsers($companyId: String!, $skip: Int!, $first: Int!) {
+          companyUserList(companyId: $companyId, skip: $skip, first: $first, orderBy: firstName_ASC) {
+            users {
+              id
+              uid
+              email
+              firstName
+              lastName
+              fullName
+              timezone
+              updatedAt
+            }
+            totalCount
+            pageInfo {
+              hasNextPage
+            }
+          }
+        }
+      `,
+      {
+        companyId,
+        skip,
+        first: pageSize,
+      },
+    );
+
+    const pageItems = data.companyUserList.users;
+    items.push(...pageItems);
+    if (!data.companyUserList.pageInfo.hasNextPage || pageItems.length < pageSize) {
+      break;
+    }
+    skip += pageSize;
+  }
+
+  return items;
+}
+
 export async function fetchWorkspaceLists(input: {
   workspaceId: string;
   updatedAfter?: string | null;

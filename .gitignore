@@ -21,6 +21,7 @@ apps/aya-ops-bot/deploy/hetzner/env/aya.env
 apps/aya-ops-bot/deploy/hetzner/env/librechat.env
 apps/aya-ops-bot/deploy/hetzner/config/librechat.yaml
 apps/librechat/data-node/
+apps/librechat/aya-data/
 apps/librechat/logs/
 apps/librechat/uploads/
 apps/librechat/meili_data*/

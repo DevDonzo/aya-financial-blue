@@ -165,10 +165,10 @@ mcpServers:
     customUserVars:
       AYA_BLUE_TOKEN_ID:
         title: "Blue Token ID"
-        description: "Your personal Blue Token ID from Blue > Profile > API. Used for employee-triggered Blue write actions so Blue attributes the change to you."
+        description: "Connect your Blue account once by pasting the Token ID from Blue > Profile > API. Aya uses it only for Blue write actions you trigger."
       AYA_BLUE_TOKEN_SECRET:
         title: "Blue Token Secret"
-        description: "Your personal Blue Token Secret. Stored encrypted by LibreChat and used only for employee-triggered Blue write actions."
+        description: "The matching Blue Token Secret. Stored encrypted by LibreChat and reused only for your attributable Blue write actions."
     serverInstructions: |
       Aya Ops tools back the Aya Financial Assistant. Keep the experience business-facing and internal-only. Use these tools for workflow lookups, summaries, recent comments, approved CRM actions, workload questions, and reporting. Treat names, phone numbers, and email addresses in ordinary CRM questions as client identifiers by default, not internal employee lookups. Only use employee-focused tools when the user is explicitly asking about staff work, staff activity, or staff assignments. Prefer explicit firstName and lastName arguments for lead creation, normalize human names and obvious amount shorthand, and ask a short follow-up instead of guessing when a request is ambiguous.
     headers:

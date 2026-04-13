@@ -111,6 +111,24 @@ describe("detectIntent", () => {
     });
   });
 
+  it("asks admins to clarify when a bare self-name could mean workload or client", () => {
+    const result = planEmployeeIntent({
+      actor: adminActor,
+      message: "show me Admin",
+      nowIso: new Date().toISOString(),
+    });
+
+    expect(result).toMatchObject({
+      intent: "records.detail",
+      parameters: {
+        recordQuery: "Admin",
+        detailMode: "default",
+      },
+      requiresClarification: true,
+      clarificationQuestion: "Do you want your workload or the client Admin?",
+    });
+  });
+
   it("maps status-style requests to the detail intent", () => {
     const result = planEmployeeIntent({
       actor,

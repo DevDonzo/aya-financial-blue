@@ -1092,6 +1092,17 @@ function resolveDetailIntent(
     );
   }
 
+  if (!useActiveRecordContext && isAdminSelfNameReference(detailQuery, request)) {
+    return candidate(
+      "records.detail",
+      84,
+      0.78,
+      { recordQuery: detailQuery, detailMode: "default" },
+      ["records:detail:self-name:ambiguous"],
+      `Do you want your workload or the client ${detailQuery}?`,
+    );
+  }
+
   return candidate(
     "records.detail",
     message.startsWith("show ") || message.startsWith("show me ") ? 78 : 88,
@@ -1301,6 +1312,31 @@ function normalizeEmployeeTarget(
   return normalized === "i" || normalized === "me"
     ? request.actor.displayName
     : value.trim();
+}
+
+function isAdminSelfNameReference(
+  value: string,
+  request: IntentPlannerRequest,
+) {
+  if (request.actor.roleName !== "admin") {
+    return false;
+  }
+
+  const normalizedValue = normalize(value);
+  if (!normalizedValue) {
+    return false;
+  }
+
+  const actorDisplayName = normalize(request.actor.displayName);
+  const actorNameParts = actorDisplayName
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return (
+    normalizedValue === actorDisplayName ||
+    actorNameParts.includes(normalizedValue)
+  );
 }
 
 function buildRecordActivityCandidate(

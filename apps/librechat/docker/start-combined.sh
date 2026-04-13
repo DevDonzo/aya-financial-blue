@@ -4,6 +4,23 @@ set -euo pipefail
 AYA_PORT="${AYA_PORT:-3010}"
 AYA_HEALTH_URL="http://127.0.0.1:${AYA_PORT}/health"
 AYA_API_URL="${AYA_API_URL:-http://127.0.0.1:${AYA_PORT}/mcp}"
+AYA_DATA_DIR="${AYA_DATA_DIR:-/aya/data}"
+
+if [[ -z "${BLUE_API_URL:-}" && -n "${API_URL:-}" ]]; then
+  export BLUE_API_URL="${API_URL}"
+fi
+
+if [[ -z "${BLUE_AUTH_TOKEN:-}" && -n "${AUTH_TOKEN:-}" ]]; then
+  export BLUE_AUTH_TOKEN="${AUTH_TOKEN}"
+fi
+
+if [[ -z "${BLUE_CLIENT_ID:-}" && -n "${CLIENT_ID:-}" ]]; then
+  export BLUE_CLIENT_ID="${CLIENT_ID}"
+fi
+
+if [[ -z "${BLUE_COMPANY_ID:-}" && -n "${COMPANY_ID:-}" ]]; then
+  export BLUE_COMPANY_ID="${COMPANY_ID}"
+fi
 
 cleanup() {
   local exit_code="${1:-0}"
@@ -23,6 +40,13 @@ cleanup() {
 }
 
 trap 'cleanup 0' SIGINT SIGTERM
+
+mkdir -p "${AYA_DATA_DIR}"
+if ! touch "${AYA_DATA_DIR}/.aya-write-test" 2>/dev/null; then
+  echo "Aya data directory is not writable: ${AYA_DATA_DIR}" >&2
+  cleanup 1
+fi
+rm -f "${AYA_DATA_DIR}/.aya-write-test"
 
 cd /aya
 PORT="${AYA_PORT}" node dist/server.js &

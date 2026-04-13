@@ -9,14 +9,16 @@ services:
     mem_limit: 1400m
     depends_on:
       - mongodb
+    env_file:
+      - ${AYA_BLUE_ENV_FILE:-${HOME}/.config/blue/config.env}
     environment:
       AYA_PORT: 3010
       AYA_DATA_DIR: /aya/data
       AYA_API_URL: http://127.0.0.1:3010/mcp
-      BLUE_API_URL: ${BLUE_API_URL:-}
-      BLUE_AUTH_TOKEN: ${BLUE_AUTH_TOKEN:-}
-      BLUE_CLIENT_ID: ${BLUE_CLIENT_ID:-}
-      BLUE_COMPANY_ID: ${BLUE_COMPANY_ID:-}
+      BLUE_API_URL: ${BLUE_API_URL:-${API_URL:-}}
+      BLUE_AUTH_TOKEN: ${BLUE_AUTH_TOKEN:-${AUTH_TOKEN:-}}
+      BLUE_CLIENT_ID: ${BLUE_CLIENT_ID:-${CLIENT_ID:-}}
+      BLUE_COMPANY_ID: ${BLUE_COMPANY_ID:-${COMPANY_ID:-}}
       BLUE_WORKSPACE_ID: ${BLUE_WORKSPACE_ID:-cmn524yr800e101mh7kn44mhf}
       BLUE_WEBHOOK_PUBLIC_URL: ${BLUE_WEBHOOK_PUBLIC_URL:-}
       BLUE_WEBHOOK_SECRET: ${BLUE_WEBHOOK_SECRET:-}
@@ -27,12 +29,15 @@ services:
       LIBRECHAT_MONGO_URI: mongodb://mongodb:27017/LibreChat
       LIBRECHAT_MONGO_DB_NAME: LibreChat
     ports:
-      - "3010:3010"
+      - "${CHAT_HOST_PORT:-3081}:3080"
+      - "${AYA_HOST_PORT:-3011}:3010"
     volumes:
       - type: bind
         source: ./librechat.yaml
         target: /app/librechat.yaml
-      - aya-data:/aya/data
+      - type: bind
+        source: ./aya-data
+        target: /aya/data
     healthcheck:
       test:
         [
@@ -59,6 +64,3 @@ services:
     mem_limit: 256m
     profiles:
       - optional
-
-volumes:
-  aya-data:

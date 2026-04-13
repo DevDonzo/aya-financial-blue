@@ -157,7 +157,7 @@ function createAyaMcpServer() {
     {
       title: "Aya Chat Action",
       description:
-        "Run one Aya bot request in natural language. Use this for normal employee chat behavior.",
+        "Default Aya entrypoint for natural-language chat. Use this first for ordinary employee or admin requests, especially ambiguous requests like 'show me Hamza', 'what's going on with X', 'comments on this client', 'move this to underwriting', 'what changed today', and similar conversational asks. Aya will apply role-aware planning, clarification, policy checks, and deterministic execution behind the scenes. Only skip this tool when the user is making a very explicit structured request that clearly belongs to one specialist Aya tool and already includes the exact parameters needed.",
       inputSchema: {
         message: z
           .string()
@@ -280,7 +280,7 @@ function createAyaMcpServer() {
     {
       title: "Get Client Detail",
       description:
-        "Load a client's current Blue status, contact fields, and recent activity/comments. Use `clientQuery` for a client name, record title, email, or phone number.",
+        "Load a client's current Blue status, contact fields, and recent activity/comments. Use `clientQuery` for a client name, record title, email, or phone number. Use this only when the request is explicitly about a CRM client/file. Do not use this for employee workload or admin reporting questions.",
       inputSchema: {
         recordId: z.string().optional(),
         clientQuery: z
@@ -310,7 +310,7 @@ function createAyaMcpServer() {
     {
       title: "Employee Activity Report",
       description:
-        "Admin-only attributed Aya activity report for one internal employee. Use this when an admin asks exactly what someone did, what comments they made, how many clients they moved, what leads they created, or to see a detailed activity timeline for a day.",
+        "Admin-only attributed Aya activity report for one internal employee. Use this when an admin explicitly asks exactly what someone did, what comments they made, how many clients they moved, what leads they created, or to see a detailed activity timeline for a day or date range. Never use this for ambiguous requests like 'show me Hamza' or for normal employee client lookups.",
       inputSchema: {
         employeeId: z.string().optional(),
         employeeEmail: z.string().email().optional(),
@@ -553,7 +553,7 @@ function createAyaMcpServer() {
     {
       title: "Employee Workload",
       description:
-        "Show the current open Blue workload assigned to one internal employee in the allowed workspace. Do not use this for CRM clients or client emails.",
+        "Show the current open Blue workload assigned to one internal employee in the allowed workspace. Use this only when the user explicitly asks what someone is working on, asks for open files, or asks for workload. Do not use this for CRM clients, client emails, or ambiguous requests like 'show me Hamza' or 'open Hamza'.",
       inputSchema: {
         employeeId: z.string().optional(),
         employeeEmail: z.string().email().optional(),

@@ -92,7 +92,8 @@ export function useAyaRuntimeStatus(): AyaRuntimeStatus {
     return {
       state: 'write_auth_needed',
       label: 'Aya read-only',
-      detail: 'Reads are available. Add your personal Blue Token ID and Secret in Aya MCP settings for attributable writes.',
+      detail:
+        'Reads are available. Connect Blue once in Aya settings to unlock attributable comments, moves, and lead creation.',
       tone: 'warning',
       visible: true,
     };

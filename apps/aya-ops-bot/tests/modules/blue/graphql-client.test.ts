@@ -76,6 +76,31 @@ const server = setupServer(
       });
     }
 
+    if (body.query.includes("query CompanyUsers")) {
+      return HttpResponse.json({
+        data: {
+          companyUserList: {
+            users: [
+              {
+                id: "emp_sarah",
+                uid: "emp_uid_sarah",
+                email: "sarah.khan@ayafinancial.com",
+                firstName: "Sarah",
+                lastName: "Khan",
+                fullName: "Sarah Khan",
+                timezone: "America/Toronto",
+                updatedAt: "2026-03-25T00:00:00.000Z",
+              },
+            ],
+            totalCount: 1,
+            pageInfo: {
+              hasNextPage: false,
+            },
+          },
+        },
+      });
+    }
+
     if (body.query.includes("query AssignedOpenRecords")) {
       return HttpResponse.json({
         data: {
@@ -331,6 +356,24 @@ describe("blue graphql client mutations and workload query", () => {
         tokenSecret: "user-token-secret",
         companyId: "test-company",
         projectId: "cmn524yr800e101mh7kn44mhf",
+      });
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it("lists company users without a project header", async () => {
+    const env = createTestEnvironment();
+    try {
+      const { fetchCompanyUsers } = await import("../../../src/modules/blue/graphql/client.js");
+      const result = await fetchCompanyUsers("test-company");
+
+      expect(result[0]?.email).toBe("sarah.khan@ayafinancial.com");
+      expect(requests[0]?.headers).toEqual({
+        tokenId: "test-client",
+        tokenSecret: "test-secret",
+        companyId: "test-company",
+        projectId: null,
       });
     } finally {
       env.cleanup();
