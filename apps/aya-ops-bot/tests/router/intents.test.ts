@@ -350,6 +350,55 @@ describe("detectIntent", () => {
     });
   });
 
+  it("maps admin exception-report requests to the exception report intent", () => {
+    const result = planEmployeeIntent({
+      actor: adminActor,
+      message: "show me exception reports",
+      nowIso: fixedNowIso,
+    });
+
+    expect(result).toMatchObject({
+      intent: "records.exception_report",
+      parameters: {
+        exceptionFocus: "all",
+      },
+      requiresClarification: false,
+    });
+  });
+
+  it("maps admin missing-finance requests to a focused exception report", () => {
+    const result = planEmployeeIntent({
+      actor: adminActor,
+      message: "which records are missing finance amount",
+      nowIso: fixedNowIso,
+    });
+
+    expect(result).toMatchObject({
+      intent: "records.exception_report",
+      parameters: {
+        exceptionFocus: "finance_amount",
+      },
+      requiresClarification: false,
+    });
+  });
+
+  it("maps admin employee-filtered exception requests", () => {
+    const result = planEmployeeIntent({
+      actor: adminActor,
+      message: "show me records assigned to Sarah with missing required fields",
+      nowIso: fixedNowIso,
+    });
+
+    expect(result).toMatchObject({
+      intent: "records.exception_report",
+      parameters: {
+        exceptionFocus: "all",
+        employeeName: "Sarah",
+      },
+      requiresClarification: false,
+    });
+  });
+
   it("maps call-prep phrasing to the detail planner with call prep mode", () => {
     const result = planEmployeeIntent({
       actor,

@@ -14,6 +14,7 @@ export type IntentName =
   | "activity.employee_report"
   | "activity.record_report"
   | "activity.workspace_report"
+  | "records.exception_report"
   | "records.list_assigned"
   | "records.follow_up"
   | "records.search"

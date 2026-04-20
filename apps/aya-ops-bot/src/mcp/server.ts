@@ -4,6 +4,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 
+import { AppError } from "../app/errors.js";
+import { createId, insertBotAuditLog } from "../db.js";
 import {
   addCommentToClient,
   createClientRecord,
@@ -25,7 +27,7 @@ import {
   answerReportingQuestion,
   getReportingOverview,
 } from "../reporting/service.js";
-import type { BlueRequestAuth } from "../domain/types.js";
+import type { BlueRequestAuth, EmployeeIdentity, IntentName } from "../domain/types.js";
 import { normalizeBlueRequestAuth } from "../modules/blue/request-auth.js";
 
 export async function handleAyaMcpRequest(
@@ -143,6 +145,79 @@ function getHeaderValue(
 
 function toStructuredContent(value: unknown) {
   return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+}
+
+async function recordMcpToolAudit(input: {
+  actor: EmployeeIdentity;
+  toolName: string;
+  intent: IntentName;
+  inboundText: string;
+  requestJson: Record<string, unknown>;
+  outcome: string;
+  responseText?: string;
+  responseJson?: unknown;
+}) {
+  await insertBotAuditLog({
+    id: createId("audit"),
+    employeeId: input.actor.employeeId,
+    transport: "mcp",
+    inboundText: input.inboundText,
+    detectedIntent: input.intent,
+    adapter: "mcp_tool",
+    commandName: input.toolName,
+    commandArgs: JSON.stringify(input.requestJson),
+    outcome: input.outcome,
+    responseText: input.responseText,
+    requestJson: input.requestJson,
+    responseJson:
+      input.responseJson === undefined
+        ? undefined
+        : {
+            data: input.responseJson,
+          },
+  });
+}
+
+export async function runAuditedMcpTool<T extends { responseText?: string }>(input: {
+  actor: EmployeeIdentity;
+  toolName: string;
+  intent: IntentName;
+  inboundText: string;
+  requestJson: Record<string, unknown>;
+  execute: () => Promise<T>;
+}) {
+  try {
+    const result = await input.execute();
+    await recordMcpToolAudit({
+      actor: input.actor,
+      toolName: input.toolName,
+      intent: input.intent,
+      inboundText: input.inboundText,
+      requestJson: input.requestJson,
+      outcome: "success",
+      responseText: result.responseText,
+      responseJson: result,
+    });
+    return result;
+  } catch (error) {
+    await recordMcpToolAudit({
+      actor: input.actor,
+      toolName: input.toolName,
+      intent: input.intent,
+      inboundText: input.inboundText,
+      requestJson: input.requestJson,
+      outcome: "error",
+      responseText: error instanceof Error ? error.message : "Unknown error",
+      responseJson:
+        error instanceof AppError
+          ? {
+              code: error.code,
+              details: error.details ?? null,
+            }
+          : undefined,
+    });
+    throw error;
+  }
 }
 
 function createAyaMcpServer() {
@@ -606,17 +681,34 @@ function createAyaMcpServer() {
     ) => {
       const actor = await requireToolActor(extra.requestInfo?.headers);
       const blueAuth = getHeaderBlueAuth(extra.requestInfo?.headers);
-      const result = await createClientRecord({
-        firstName,
-        lastName,
-        fullName,
-        phone,
-        email,
-        financeAmount,
-        notes,
-        targetListQuery,
+      const result = await runAuditedMcpTool({
         actor,
-        blueAuth,
+        toolName: "aya_create_client_record",
+        intent: "records.create",
+        inboundText: `create lead ${[fullName ?? [firstName, lastName].filter(Boolean).join(" "), phone, email].filter(Boolean).join(" ")}`.trim(),
+        requestJson: {
+          firstName,
+          lastName,
+          fullName,
+          phone,
+          email,
+          financeAmount,
+          notes,
+          targetListQuery,
+        },
+        execute: () =>
+          createClientRecord({
+            firstName,
+            lastName,
+            fullName,
+            phone,
+            email,
+            financeAmount,
+            notes,
+            targetListQuery,
+            actor,
+            blueAuth,
+          }),
       });
       return {
         content: [{ type: "text", text: result.responseText }],
@@ -639,11 +731,22 @@ function createAyaMcpServer() {
     async ({ recordQuery, targetListQuery }, extra) => {
       const actor = await requireToolActor(extra.requestInfo?.headers);
       const blueAuth = getHeaderBlueAuth(extra.requestInfo?.headers);
-      const result = await moveClientToStage({
-        recordQuery,
-        targetListQuery,
+      const result = await runAuditedMcpTool({
         actor,
-        blueAuth,
+        toolName: "aya_move_client_to_stage",
+        intent: "records.move",
+        inboundText: `move ${recordQuery} to ${targetListQuery}`,
+        requestJson: {
+          recordQuery,
+          targetListQuery,
+        },
+        execute: () =>
+          moveClientToStage({
+            recordQuery,
+            targetListQuery,
+            actor,
+            blueAuth,
+          }),
       });
       return {
         content: [{ type: "text", text: result.responseText }],
@@ -666,11 +769,22 @@ function createAyaMcpServer() {
     async ({ recordQuery, text }, extra) => {
       const actor = await requireToolActor(extra.requestInfo?.headers);
       const blueAuth = getHeaderBlueAuth(extra.requestInfo?.headers);
-      const result = await addCommentToClient({
-        recordQuery,
-        text,
+      const result = await runAuditedMcpTool({
         actor,
-        blueAuth,
+        toolName: "aya_add_client_comment",
+        intent: "comments.create",
+        inboundText: `add comment to ${recordQuery}: ${text}`,
+        requestJson: {
+          recordQuery,
+          text,
+        },
+        execute: () =>
+          addCommentToClient({
+            recordQuery,
+            text,
+            actor,
+            blueAuth,
+          }),
       });
       return {
         content: [{ type: "text", text: result.responseText }],

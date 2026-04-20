@@ -3,7 +3,12 @@ import {
   ValidationError,
 } from "../../app/errors.js";
 import { getBlueRecordDetail } from "../../blue/record-detail.js";
-import { listBotAuditLogsForDay, listBotAuditLogsForEmployeeDay, listBotAuditLogsInRange } from "../../db.js";
+import {
+  listBotAuditLogsForDay,
+  listBotAuditLogsForEmployeeDay,
+  listBotAuditLogsInRange,
+  listCachedBlueRecordsForInspection,
+} from "../../db.js";
 import {
   getIndexedRecord,
   resolveListQuery,
@@ -51,6 +56,10 @@ import {
   type WorkspaceActivityFocus,
 } from "./admin-activity-report.js";
 import { normalizeActivityDateRange } from "./activity-date-range.js";
+import {
+  buildWorkspaceExceptionReport,
+  type ExceptionReportFocus,
+} from "./exception-report.js";
 
 const BLUE_WRITE_AUTH_REJECTED_MESSAGE =
   "Blue rejected your saved personal Token ID and Secret for this write action. Open the Aya MCP server settings, re-save your Blue Token ID and Secret from Blue > Profile > API, then try again.";
@@ -280,6 +289,19 @@ export async function getWorkspaceActivityReport(input: {
     dateLabel: range.dateLabel,
     rows,
     focus: input.focus,
+  });
+}
+
+export async function getWorkspaceExceptionReport(input: {
+  focus?: ExceptionReportFocus;
+  employeeName?: string;
+}) {
+  const rows = await listCachedBlueRecordsForInspection(config.BLUE_WORKSPACE_ID);
+
+  return buildWorkspaceExceptionReport({
+    rows,
+    focus: input.focus,
+    employeeName: input.employeeName,
   });
 }
 

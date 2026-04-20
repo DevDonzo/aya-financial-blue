@@ -27,6 +27,7 @@ import {
   getEmployeeFollowUpQueue,
   getEmployeeWorkload,
   getRecordActivityReport,
+  getWorkspaceExceptionReport,
   getReportingOverview,
   getTeamDaySummary,
   getWorkspaceActivityReport,
@@ -299,6 +300,7 @@ function enforceIntentPermissions(actor: EmployeeIdentity, plan: IntentPlan) {
     plan.intent === "activity.employee_report" ||
     plan.intent === "activity.record_report" ||
     plan.intent === "activity.workspace_report" ||
+    plan.intent === "records.exception_report" ||
     plan.intent === "summary.team_day" ||
     plan.intent === "summary.no_activity_day" ||
     plan.intent === "reporting.overview" ||
@@ -452,6 +454,31 @@ async function executePlan(input: {
             ? plan.parameters.dateLabel
             : undefined,
         focus,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "records.exception_report": {
+      const focus =
+        plan.parameters.exceptionFocus === "finance_amount" ||
+        plan.parameters.exceptionFocus === "due_date" ||
+        plan.parameters.exceptionFocus === "closing_date" ||
+        plan.parameters.exceptionFocus === "assignee" ||
+        plan.parameters.exceptionFocus === "client_name" ||
+        plan.parameters.exceptionFocus === "email" ||
+        plan.parameters.exceptionFocus === "phone" ||
+        plan.parameters.exceptionFocus === "assignment"
+          ? plan.parameters.exceptionFocus
+          : "all";
+      const result = await getWorkspaceExceptionReport({
+        focus,
+        employeeName:
+          typeof plan.parameters.employeeName === "string"
+            ? plan.parameters.employeeName
+            : undefined,
       });
       return {
         responseText: result.responseText,
@@ -868,6 +895,7 @@ function getAuditAdapter(intent: IntentName) {
     case "activity.employee_report":
     case "activity.record_report":
     case "activity.workspace_report":
+    case "records.exception_report":
     case "summary.team_day":
     case "summary.no_activity_day":
       return "local";
@@ -905,6 +933,8 @@ function getAuditCommandName(intent: IntentName) {
       return "recordActivityReport";
     case "activity.workspace_report":
       return "workspaceActivityReport";
+    case "records.exception_report":
+      return "workspaceExceptionReport";
     default:
       return intent;
   }

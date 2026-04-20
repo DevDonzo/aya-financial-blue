@@ -48,6 +48,8 @@ export const softDeleteBlueRecordById = blueCacheRepo.softDeleteBlueRecordById;
 export const listCachedBlueLists = blueCacheRepo.listCachedBlueLists;
 export const searchCachedBlueRecords = blueCacheRepo.searchCachedBlueRecords;
 export const listCachedBlueRecords = blueCacheRepo.listCachedBlueRecords;
+export const listCachedBlueRecordsForInspection =
+  blueCacheRepo.listCachedBlueRecordsForInspection;
 export const getCachedBlueRecordById = blueCacheRepo.getCachedBlueRecordById;
 
 export const upsertEmployeeCredential = authRepo.upsertEmployeeCredential;

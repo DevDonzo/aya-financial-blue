@@ -364,6 +364,8 @@ describe("Aya copilot message flow", () => {
 
   it("returns a prioritized follow-up queue for the signed-in employee", async () => {
     const env = createTestEnvironment();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-09T12:00:00.000Z"));
 
     try {
       vi.doMock("../../src/modules/blue/graphql/client.js", async () => {
@@ -482,6 +484,7 @@ describe("Aya copilot message flow", () => {
         "Hamza stale file (Docs) - stale, last updated 2026-04-02",
       );
     } finally {
+      vi.useRealTimers();
       env.cleanup();
     }
   });
@@ -730,6 +733,133 @@ describe("Aya copilot message flow", () => {
       );
       expect(response.responseText).toContain(
         "Sheraz Khan: moved Sheraz Client to Docs Received",
+      );
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it("returns an admin exception report with missing fields by employee", async () => {
+    const env = createTestEnvironment();
+
+    try {
+      const {
+        ensureEmployee,
+        initializeDatabase,
+        upsertBlueRecordsCache,
+      } = await import("../../src/db.js");
+
+      await initializeDatabase();
+      await ensureEmployee({
+        employeeId: "admin_1",
+        displayName: "Admin User",
+        email: "admin@ayafinancial.com",
+        roleName: "admin",
+      });
+
+      await upsertBlueRecordsCache({
+        workspaceId: "cmn524yr800e101mh7kn44mhf",
+        items: [
+          {
+            id: "record_sarah",
+            title: "Sarah Exception File",
+            normalizedTitle: "sarah exception file",
+            listId: "list_leads_03",
+            listTitle: "0.3 Leads (3rd FU)",
+            dueAt: null,
+            updatedAt: "2026-04-09T12:00:00.000Z",
+            archived: false,
+            done: false,
+            rawJson: JSON.stringify({
+              users: [{ fullName: "Sarah Khan", email: "sarah@ayafinancial.com" }],
+              customFields: [
+                { name: "First Name", value: "Sarah" },
+                { name: "Last Name", value: "Client" },
+                { name: "Email", value: "sarah.client@example.com" },
+                { name: "Phone", value: "4165550199" },
+                { name: "Finance Amount 1", value: "" },
+              ],
+            }),
+          },
+          {
+            id: "record_rehan",
+            title: "Rehan Underwriting File",
+            normalizedTitle: "rehan underwriting file",
+            listId: "list_underwriting",
+            listTitle: "Underwriting",
+            dueAt: "2026-04-12T23:59:59.999Z",
+            updatedAt: "2026-04-09T12:30:00.000Z",
+            archived: false,
+            done: false,
+            rawJson: JSON.stringify({
+              users: [{ fullName: "Rehan S", email: "rehan@ayafinancial.com" }],
+              customFields: [
+                { name: "Contact Name", value: "Rehan Client" },
+                { name: "Email", value: "rehan.client@example.com" },
+                { name: "Phone", value: "6475550123" },
+                { name: "Finance Amount 1", value: 450000 },
+                { name: "Closing Date", value: "" },
+              ],
+            }),
+          },
+          {
+            id: "record_unassigned",
+            title: "Unassigned Lead File",
+            normalizedTitle: "unassigned lead file",
+            listId: "list_leads_02",
+            listTitle: "0.2 Leads (2nd FU)",
+            dueAt: "2026-04-11T23:59:59.999Z",
+            updatedAt: "2026-04-09T13:00:00.000Z",
+            archived: false,
+            done: false,
+            rawJson: JSON.stringify({
+              users: [],
+              customFields: [
+                { name: "Contact Name", value: "Unassigned Client" },
+                { name: "Email", value: "unassigned@example.com" },
+                { name: "Phone", value: "" },
+                { name: "Finance Amount 1", value: 275000 },
+              ],
+            }),
+          },
+        ],
+      });
+
+      const { handleInboundMessage } = await import(
+        "../../src/messages/handle-message.js"
+      );
+
+      const response = await handleInboundMessage({
+        actorEmployeeId: "admin_1",
+        message: "show me exception reports",
+      });
+
+      expect(response).toMatchObject({
+        matched: true,
+        intent: "records.exception_report",
+      });
+      expect(response.responseText).toContain(
+        "Exception report: 3 active records with missing required fields.",
+      );
+      expect(response.responseText).toContain("Most common gaps:");
+      expect(response.responseText).toContain("finance amount: 1");
+      expect(response.responseText).toContain("due date: 1");
+      expect(response.responseText).toContain("closing date: 1");
+      expect(response.responseText).toContain("assigned employee: 1");
+      expect(response.responseText).toContain(
+        "Assigned employees with records that have missing required fields:",
+      );
+      expect(response.responseText).toContain("Sarah Khan: 1 record");
+      expect(response.responseText).toContain("Rehan S: 1 record");
+      expect(response.responseText).toContain("Unassigned: 1 record");
+      expect(response.responseText).toContain(
+        "Sarah Exception File (0.3 Leads (3rd FU)) | Assigned to: Sarah Khan | Missing: finance amount, due date",
+      );
+      expect(response.responseText).toContain(
+        "Rehan Underwriting File (Underwriting) | Assigned to: Rehan S | Missing: closing date",
+      );
+      expect(response.responseText).toContain(
+        "Unassigned Lead File (0.2 Leads (2nd FU)) | Assigned to: Unassigned | Missing: assigned employee, phone",
       );
     } finally {
       env.cleanup();

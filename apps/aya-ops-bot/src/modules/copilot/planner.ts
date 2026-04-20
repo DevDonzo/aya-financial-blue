@@ -78,6 +78,7 @@ const INTENT_RESOLVERS: Array<
   resolveEmployeeActivityIntent,
   resolveRecordActivityIntent,
   resolveEmployeeSummaryIntent,
+  resolveExceptionReportIntent,
   resolveFollowUpIntent,
   resolveWorkloadIntent,
   resolveCommentCreateIntent,
@@ -561,6 +562,55 @@ function resolveEmployeeSummaryIntent(
   }
 
   return null;
+}
+
+function resolveExceptionReportIntent(
+  request: IntentPlannerRequest,
+): IntentCandidate | null {
+  if (request.actor.roleName !== "admin") {
+    return null;
+  }
+
+  const rawMessage = request.message.trim();
+  const message = normalize(rawMessage);
+  const isExceptionMessage =
+    /\b(exception|exceptions|incomplete|missing|required fields?|empty fields?|blank fields?|problems?)\b/.test(
+      message,
+    ) ||
+    /^which files have no\b/.test(message) ||
+    /^which files are missing\b/.test(message) ||
+    /^show me files missing\b/.test(message) ||
+    /^which records have no\b/.test(message) ||
+    /^which records are missing\b/.test(message) ||
+    /^show me records missing\b/.test(message);
+
+  if (!isExceptionMessage) {
+    return null;
+  }
+
+  const employeeTarget =
+    rawMessage.match(/\bassigned to\s+(.+?)(?:\s+(?:with|that|who)\b|[.?!]?$)/i)?.[1]?.trim() ??
+    rawMessage.match(/\bfor\s+(.+?)(?:\s+(?:with|that|who)\b|[.?!]?$)/i)?.[1]?.trim();
+
+  const exceptionFocus = resolveExceptionFocus(message);
+
+  return candidate(
+    "records.exception_report",
+    93,
+    0.9,
+    {
+      exceptionFocus,
+      employeeName:
+        employeeTarget && !TEAM_TARGETS.has(normalize(employeeTarget))
+          ? normalizeEmployeeTarget(employeeTarget, request)
+          : undefined,
+    },
+    [
+      "records:exceptions",
+      `records:exceptions:${exceptionFocus}`,
+      ...(employeeTarget ? ["records:exceptions:employee"] : []),
+    ],
+  );
 }
 
 function resolveWorkloadIntent(
@@ -1312,6 +1362,42 @@ function normalizeEmployeeTarget(
   return normalized === "i" || normalized === "me"
     ? request.actor.displayName
     : value.trim();
+}
+
+function resolveExceptionFocus(message: string) {
+  if (/\bassignment|unassigned\b/.test(message)) {
+    return "assignment";
+  }
+
+  if (/\bfinance amount\b/.test(message)) {
+    return "finance_amount";
+  }
+
+  if (/\bdue date\b|\bno due date\b/.test(message)) {
+    return "due_date";
+  }
+
+  if (/\bclosing date\b/.test(message)) {
+    return "closing_date";
+  }
+
+  if (/\bphone\b/.test(message)) {
+    return "phone";
+  }
+
+  if (/\bemail\b/.test(message)) {
+    return "email";
+  }
+
+  if (/\bcontact\b|\bname\b/.test(message)) {
+    return "client_name";
+  }
+
+  if (/\bassignee\b|assigned employee/.test(message)) {
+    return "assignee";
+  }
+
+  return "all";
 }
 
 function isAdminSelfNameReference(

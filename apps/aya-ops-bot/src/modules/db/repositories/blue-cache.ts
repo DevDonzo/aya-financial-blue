@@ -328,6 +328,28 @@ export async function listCachedBlueRecords(workspaceId: string, limit = 25) {
     .execute();
 }
 
+export async function listCachedBlueRecordsForInspection(workspaceId: string) {
+  return await db
+    .selectFrom("blue_records_cache")
+    .select([
+      "id",
+      "title",
+      "list_id",
+      "list_title",
+      "status",
+      "due_at",
+      "updated_at",
+      "archived",
+      "done",
+      "raw_json",
+    ])
+    .where("workspace_id", "=", workspaceId)
+    .where("deleted_at", "is", null)
+    .orderBy("list_title", "asc")
+    .orderBy("title", "asc")
+    .execute();
+}
+
 export async function getCachedBlueRecordById(
   workspaceId: string,
   recordId: string,
