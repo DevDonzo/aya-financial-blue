@@ -44,7 +44,7 @@ router.get('/error', (req, res) => {
 router.get(
   '/google',
   passport.authenticate('google', {
-    scope: ['openid', 'profile', 'email'],
+    scope: ['openid', 'email'],
     session: false,
   }),
 );
@@ -55,7 +55,7 @@ router.get(
     failureRedirect: `${domains.client}/oauth/error`,
     failureMessage: true,
     session: false,
-    scope: ['openid', 'profile', 'email'],
+    scope: ['openid', 'email'],
   }),
   setBalanceConfig,
   checkDomainAllowed,
