@@ -73,19 +73,6 @@ mcpSettings:
     - "localhost"
     - "127.0.0.1"
 
-endpoints:
-  custom:
-    - name: "groq"
-      apiKey: "${GROQ_API_KEY}"
-      baseURL: "https://api.groq.com/openai/v1/"
-      models:
-        default:
-          - "openai/gpt-oss-120b"
-        fetch: false
-      titleConvo: true
-      titleModel: "openai/gpt-oss-120b"
-      modelDisplayLabel: "Groq"
-
 modelSpecs:
   enforce: true
   prioritize: true
@@ -95,8 +82,8 @@ modelSpecs:
       description: "Internal assistant for client files, comments, workload, and management reporting."
       default: true
       preset:
-        endpoint: "groq"
-        model: "openai/gpt-oss-120b"
+        endpoint: "openAI"
+        model: "gpt-4o-mini"
         instructions: |
           You are Aya Financial's internal operations assistant.
 
@@ -125,6 +112,8 @@ modelSpecs:
           Use the lower-level direct tools only when you clearly need a specific structured operation and the parameters are explicit.
 
           Do not make up Blue CRM data. Use the Aya tools to look things up.
+          Never invent the current date. For today, yesterday, or date-range questions, use Aya tool results and only mention an absolute date if the tool result includes that date. If no absolute date is available, say "today" or the relative period instead of guessing.
+          When calling Aya tools for relative periods like today, yesterday, this week, last week, this month, or last month, do not pass date, dateStart, or dateEnd unless the user typed an exact YYYY-MM-DD date. Leave date fields omitted so Aya computes the correct current range.
           Keep responses concise, direct, and operational.
           Present actions and results in normal English, for example:
           - "I can look up a client, show recent comments, add a note, move a file, or create a new lead."
@@ -134,6 +123,7 @@ modelSpecs:
           If the user asks what they are working on, keep the first answer to the most relevant records instead of dumping a huge list.
           If the user asks about comments, summarize the latest useful comments first.
           If a request depends on conversation context like "that", "this client", or "he", prefer `aya_message` so Aya can interpret the full request safely.
+          For relative-date admin questions like "who did what today?", "what happened yesterday?", or "what changed this week?", prefer `aya_message` first instead of direct report tools so Aya computes the date range from the server clock.
           For requests like "show me Hamza", "update on X", "comments on X", "what's going on with X", and similar natural phrasing, prefer `aya_message` instead of a low-level direct tool.
           Treat names, phone numbers, and email addresses in ordinary CRM questions as client identifiers by default, not internal employee lookups.
           Only use employee-focused tools when the user is explicitly asking about staff work, staff activity, or staff assignments.
@@ -170,7 +160,7 @@ mcpServers:
         title: "Blue Token Secret"
         description: "The matching Blue Token Secret. Stored encrypted by LibreChat and reused only for your attributable Blue write actions."
     serverInstructions: |
-      Aya Ops tools back the Aya Financial Assistant. Keep the experience business-facing and internal-only. Use these tools for workflow lookups, summaries, recent comments, approved CRM actions, workload questions, and reporting. Treat names, phone numbers, and email addresses in ordinary CRM questions as client identifiers by default, not internal employee lookups. Only use employee-focused tools when the user is explicitly asking about staff work, staff activity, or staff assignments. Prefer explicit firstName and lastName arguments for lead creation, normalize human names and obvious amount shorthand, and ask a short follow-up instead of guessing when a request is ambiguous.
+      Aya Ops tools back the Aya Financial Assistant. Keep the experience business-facing and internal-only. Use these tools for workflow lookups, summaries, recent comments, approved CRM actions, workload questions, and reporting. For relative-date admin questions like "who did what today?", "what happened yesterday?", or "what changed this week?", prefer aya_message first so Aya computes the date range from the server clock. Use dedicated report tools only when the user typed an exact YYYY-MM-DD date or explicit date range, or when all date fields can be safely omitted. Treat names, phone numbers, and email addresses in ordinary CRM questions as client identifiers by default, not internal employee lookups. Only use employee-focused tools when the user is explicitly asking about staff work, staff activity, or staff assignments. Prefer explicit firstName and lastName arguments for lead creation, normalize human names and obvious amount shorthand, and ask a short follow-up instead of guessing when a request is ambiguous.
     headers:
       x-aya-employee-email: "{{LIBRECHAT_USER_EMAIL}}"
       x-aya-employee-name: "{{LIBRECHAT_USER_NAME}}"

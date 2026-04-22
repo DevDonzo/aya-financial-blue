@@ -34,6 +34,8 @@ import {
 import type { BlueRequestAuth, EmployeeIdentity, IntentName } from "../domain/types.js";
 import { normalizeBlueRequestAuth } from "../modules/blue/request-auth.js";
 
+const MIN_REASONABLE_ACTIVITY_DATE = "2025-01-01";
+
 export async function handleAyaMcpRequest(
   request: IncomingMessage,
   response: ServerResponse,
@@ -389,7 +391,7 @@ function createAyaMcpServer() {
     {
       title: "Employee Activity Report",
       description:
-        "Admin-only attributed Aya activity report for one internal employee. Use this when an admin explicitly asks exactly what someone did, what comments they made, how many clients they moved, what leads they created, or to see a detailed activity timeline for a day or date range. Never use this for ambiguous requests like 'show me Hamza' or for normal employee client lookups.",
+        "Admin-only attributed Aya activity report for one internal employee. Use this when an admin explicitly asks exactly what someone did, what comments they made, how many clients they moved, what leads they created, or to see a detailed activity timeline for a day or date range. Never use this for ambiguous requests like 'show me Hamza' or for normal employee client lookups. For relative periods like today, yesterday, this week, last week, this month, or last month, leave date fields omitted unless the user typed an exact YYYY-MM-DD date.",
       inputSchema: {
         employeeId: z.string().optional(),
         employeeEmail: z.string().email().optional(),
@@ -397,9 +399,15 @@ function createAyaMcpServer() {
         date: z
           .string()
           .optional()
-          .describe("Optional single date in YYYY-MM-DD format."),
-        dateStart: z.string().optional(),
-        dateEnd: z.string().optional(),
+          .describe("Optional single date in YYYY-MM-DD format. Leave omitted for relative periods like today unless the user typed an exact date."),
+        dateStart: z
+          .string()
+          .optional()
+          .describe("Optional YYYY-MM-DD range start. Leave omitted for relative periods unless the user typed an exact date range."),
+        dateEnd: z
+          .string()
+          .optional()
+          .describe("Optional YYYY-MM-DD range end. Leave omitted for relative periods unless the user typed an exact date range."),
         dateLabel: z.string().optional(),
         focus: z
           .enum(["all", "comments", "moves", "creates", "timeline"])
@@ -411,13 +419,12 @@ function createAyaMcpServer() {
       extra,
     ) => {
       await requireAdminToolActor(extra.requestInfo?.headers);
+      const safeDateArgs = normalizeActivityReportDateArgs({ date, dateStart, dateEnd });
       const result = await getEmployeeActivityReport({
         employeeId,
         employeeEmail,
         employeeName,
-        date,
-        dateStart,
-        dateEnd,
+        ...safeDateArgs,
         dateLabel,
         focus,
       });
@@ -433,14 +440,20 @@ function createAyaMcpServer() {
     {
       title: "Get Workspace Activity Report",
       description:
-        "Admin-only audit-backed workspace activity report for the allowed Aya workspace `03 - AYA x Hamza/ AI`. Use this when admins ask what happened today, who moved clients, who made comments, who created leads, or for a workspace activity timeline.",
+        "Admin-only audit-backed workspace activity report for the allowed Aya workspace `03 - AYA x Hamza/ AI`. Use this when admins ask what happened today, who moved clients, who made comments, who created leads, or for a workspace activity timeline. For relative periods like today, yesterday, this week, last week, this month, or last month, leave date fields omitted unless the user typed an exact YYYY-MM-DD date.",
       inputSchema: {
         date: z
           .string()
           .optional()
-          .describe("Optional date in YYYY-MM-DD format. Defaults to today."),
-        dateStart: z.string().optional(),
-        dateEnd: z.string().optional(),
+          .describe("Optional date in YYYY-MM-DD format. Defaults to today. Leave omitted for relative periods like today unless the user typed an exact date."),
+        dateStart: z
+          .string()
+          .optional()
+          .describe("Optional YYYY-MM-DD range start. Leave omitted for relative periods unless the user typed an exact date range."),
+        dateEnd: z
+          .string()
+          .optional()
+          .describe("Optional YYYY-MM-DD range end. Leave omitted for relative periods unless the user typed an exact date range."),
         dateLabel: z.string().optional(),
         focus: z
           .enum(["all", "comments", "moves", "creates", "timeline"])
@@ -449,10 +462,9 @@ function createAyaMcpServer() {
     },
     async ({ date, dateStart, dateEnd, dateLabel, focus }, extra) => {
       await requireAdminToolActor(extra.requestInfo?.headers);
+      const safeDateArgs = normalizeActivityReportDateArgs({ date, dateStart, dateEnd });
       const result = await getWorkspaceActivityReport({
-        date,
-        dateStart,
-        dateEnd,
+        ...safeDateArgs,
         dateLabel,
         focus,
       });
@@ -469,7 +481,7 @@ function createAyaMcpServer() {
     {
       title: "Get Client Activity Report",
       description:
-        "Admin-only audit-backed client activity report for the allowed Aya workspace `03 - AYA x Hamza/ AI`. Use this when admins ask who touched a client, who commented on a file, what happened on a client, or for a client activity timeline.",
+        "Admin-only audit-backed client activity report for the allowed Aya workspace `03 - AYA x Hamza/ AI`. Use this when admins ask who touched a client, who commented on a file, what happened on a client, or for a client activity timeline. For relative periods like today, yesterday, this week, last week, this month, or last month, leave date fields omitted unless the user typed an exact YYYY-MM-DD date.",
       inputSchema: {
         recordId: z.string().optional(),
         clientQuery: z
@@ -479,21 +491,26 @@ function createAyaMcpServer() {
         date: z
           .string()
           .optional()
-          .describe("Optional single date in YYYY-MM-DD format."),
-        dateStart: z.string().optional(),
-        dateEnd: z.string().optional(),
+          .describe("Optional single date in YYYY-MM-DD format. Leave omitted for relative periods like today unless the user typed an exact date."),
+        dateStart: z
+          .string()
+          .optional()
+          .describe("Optional YYYY-MM-DD range start. Leave omitted for relative periods unless the user typed an exact date range."),
+        dateEnd: z
+          .string()
+          .optional()
+          .describe("Optional YYYY-MM-DD range end. Leave omitted for relative periods unless the user typed an exact date range."),
         dateLabel: z.string().optional(),
         focus: z.enum(["all", "comments", "moves", "timeline"]).default("all"),
       },
     },
     async ({ recordId, clientQuery, date, dateStart, dateEnd, dateLabel, focus }, extra) => {
       const actor = await requireAdminToolActor(extra.requestInfo?.headers);
+      const safeDateArgs = normalizeActivityReportDateArgs({ date, dateStart, dateEnd });
       const result = await getRecordActivityReport({
         recordId,
         recordQuery: clientQuery,
-        date,
-        dateStart,
-        dateEnd,
+        ...safeDateArgs,
         dateLabel,
         focus,
         actor,
@@ -945,4 +962,36 @@ function createAyaMcpServer() {
   );
 
   return server;
+}
+
+function normalizeActivityReportDateArgs(input: {
+  date?: string;
+  dateStart?: string;
+  dateEnd?: string;
+}) {
+  return {
+    date: normalizeActivityReportDate(input.date),
+    dateStart: normalizeActivityReportDate(input.dateStart),
+    dateEnd: normalizeActivityReportDate(input.dateEnd),
+  };
+}
+
+function normalizeActivityReportDate(value?: string) {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return normalized;
+  }
+
+  // gpt-4o-mini can invent stale 2023 dates for "today". Aya's reporting is
+  // operational/current, so pre-2025 dates are treated as model noise and
+  // omitted to let the report service default to the server clock.
+  if (normalized < MIN_REASONABLE_ACTIVITY_DATE) {
+    return undefined;
+  }
+
+  return normalized;
 }

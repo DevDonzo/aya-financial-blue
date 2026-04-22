@@ -440,6 +440,7 @@ Edit `env/librechat.env` and set:
 - `JWT_SECRET`
 - `JWT_REFRESH_SECRET`
 - `MEILI_MASTER_KEY`
+- `OPENAI_API_KEY`
 
 Generate secrets with:
 
@@ -455,6 +456,8 @@ Use:
 - 64 hex characters for `JWT_SECRET`
 - 64 hex characters for `JWT_REFRESH_SECRET`
 - 64 hex characters for `MEILI_MASTER_KEY`
+
+The default LibreChat endpoint is `openAI`, and the default Aya assistant model is `gpt-4o-mini`.
 
 Edit `config/librechat.yaml` only if Aya-specific UI or policy settings need to change.
 

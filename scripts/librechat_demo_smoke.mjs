@@ -33,6 +33,8 @@ function parseArgs(argv) {
     email: process.env.LIBRECHAT_EMAIL || DEFAULT_EMAIL,
     password: process.env.LIBRECHAT_PASSWORD || DEFAULT_PASSWORD,
     token: process.env.LIBRECHAT_BEARER_TOKEN || null,
+    endpoint: process.env.LIBRECHAT_ENDPOINT || "openAI",
+    endpointType: process.env.LIBRECHAT_ENDPOINT_TYPE || null,
     timeoutMs: Number(process.env.LIBRECHAT_STREAM_TIMEOUT_MS || DEFAULT_TIMEOUT_MS),
     fullDemo: false,
     json: false,
@@ -67,6 +69,16 @@ function parseArgs(argv) {
 
     if (arg.startsWith("--token=")) {
       options.token = arg.slice("--token=".length);
+      continue;
+    }
+
+    if (arg.startsWith("--endpoint=")) {
+      options.endpoint = arg.slice("--endpoint=".length);
+      continue;
+    }
+
+    if (arg.startsWith("--endpoint-type=")) {
+      options.endpointType = arg.slice("--endpoint-type=".length);
       continue;
     }
 
@@ -115,22 +127,29 @@ async function startGeneration({
   prompt,
   conversationId,
   parentMessageId,
+  endpoint,
+  endpointType,
 }) {
-  const response = await fetch(`${baseUrl}/api/agents/chat/groq`, {
+  const payload = {
+    text: prompt,
+    conversationId,
+    parentMessageId,
+    endpoint,
+    spec: "aya-ops-assistant",
+  };
+
+  if (endpointType) {
+    payload.endpointType = endpointType;
+  }
+
+  const response = await fetch(`${baseUrl}/api/agents/chat/${encodeURIComponent(endpoint)}`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${token}`,
       "content-type": "application/json",
       "user-agent": DEFAULT_USER_AGENT,
     },
-    body: JSON.stringify({
-      text: prompt,
-      conversationId,
-      parentMessageId,
-      endpoint: "groq",
-      endpointType: "custom",
-      spec: "aya-ops-assistant",
-    }),
+    body: JSON.stringify(payload),
   });
 
   const bodyText = await response.text();
@@ -295,6 +314,8 @@ async function runPrompt({
   conversationId,
   parentMessageId,
   timeoutMs,
+  endpoint,
+  endpointType,
 }) {
   const started = await startGeneration({
     baseUrl,
@@ -302,6 +323,8 @@ async function runPrompt({
     prompt,
     conversationId,
     parentMessageId,
+    endpoint,
+    endpointType,
   });
   const streamed = await collectStream({
     baseUrl,
@@ -371,6 +394,8 @@ async function main() {
       conversationId,
       parentMessageId,
       timeoutMs: options.timeoutMs,
+      endpoint: options.endpoint,
+      endpointType: options.endpointType,
     });
 
     results.push(result);

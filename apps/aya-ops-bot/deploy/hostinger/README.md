@@ -123,7 +123,7 @@ Edit `deploy/hostinger/env/librechat.env`:
 
 - set `DOMAIN_CLIENT` and `DOMAIN_SERVER` to the final chat hostname
 - replace all secrets
-- set the Groq key if you want the same demo setup
+- set `OPENAI_API_KEY`; the default LibreChat model spec uses OpenAI `gpt-4o-mini`
 
 Edit `deploy/hostinger/config/librechat.yaml` if needed.
 The checked-in `aya_ops` MCP server definition includes per-user `Blue Token ID` and `Blue Token Secret` fields. Employees should save their own Blue personal token once in the Aya MCP server settings so Blue write actions are attributed to the correct user.

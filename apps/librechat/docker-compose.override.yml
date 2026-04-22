@@ -26,6 +26,7 @@ services:
       ALLOW_SYSTEM_BLUE_WRITE_FALLBACK: ${ALLOW_SYSTEM_BLUE_WRITE_FALLBACK:-true}
       AUDIT_STDOUT_MODE: ${AUDIT_STDOUT_MODE:-metadata}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LIBRECHAT_MONGO_URI: mongodb://mongodb:27017/LibreChat
       LIBRECHAT_MONGO_DB_NAME: LibreChat
     ports:
