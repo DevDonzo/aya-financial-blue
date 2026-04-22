@@ -564,6 +564,7 @@ describe("blue graphql client mutations and workload query", () => {
       expect(result.comments[0]?.text).toBe("Latest update");
       expect(requests[0]?.query).toContain("query RecordDetail");
       expect(requests[0]?.query).toMatch(/}\s+commentList\(/);
+      expect(requests[0]?.query).toContain("items: checklistItems");
       expect(requests[0]?.variables).toEqual({ recordId: "todo_1" });
     } finally {
       env.cleanup();

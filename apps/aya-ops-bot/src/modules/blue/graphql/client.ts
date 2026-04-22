@@ -442,7 +442,7 @@ export async function fetchRecordDetail(workspaceId: string, recordId: string) {
           checklists {
             id
             title
-            items {
+            items: checklistItems {
               id
               uid
               title
