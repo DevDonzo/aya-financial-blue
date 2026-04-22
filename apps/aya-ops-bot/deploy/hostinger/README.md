@@ -121,7 +121,7 @@ Use a dedicated Aya integration/service account for these system-level Blue cred
 
 Edit `deploy/hostinger/env/librechat.env`:
 
-- set `DOMAIN_CLIENT` and `DOMAIN_SERVER` to the final chat hostname
+- set `DOMAIN_CLIENT` and `DOMAIN_SERVER` to the final chat hostname, typically `https://copilot.ayafinancial.com`
 - replace all secrets
 - set `OPENAI_API_KEY`; the default LibreChat model spec uses OpenAI `gpt-4o-mini`
 - to enable Google login, set `ALLOW_SOCIAL_LOGIN=true`, `ALLOW_SOCIAL_REGISTRATION=true`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET`
