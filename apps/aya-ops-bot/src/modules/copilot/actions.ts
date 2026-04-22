@@ -1063,7 +1063,6 @@ async function loadAssignedChecklistItems(
 ): Promise<{ items: AssignmentItem[]; pageInfo: BluePageInfo }> {
   const [checklistResult, recordsResult] = await Promise.all([
     listAssignedChecklistItems({
-      workspaceId: config.BLUE_WORKSPACE_ID,
       assigneeId,
       done:
         status === "open"
@@ -1077,7 +1076,6 @@ async function loadAssignedChecklistItems(
     }),
     status !== "completed"
       ? listAssignedOpenRecords({
-          workspaceId: config.BLUE_WORKSPACE_ID,
           companyId: config.BLUE_COMPANY_ID,
           assigneeId,
           limit: 50,
