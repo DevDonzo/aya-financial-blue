@@ -124,6 +124,8 @@ Edit `deploy/hostinger/env/librechat.env`:
 - set `DOMAIN_CLIENT` and `DOMAIN_SERVER` to the final chat hostname
 - replace all secrets
 - set `OPENAI_API_KEY`; the default LibreChat model spec uses OpenAI `gpt-4o-mini`
+- to enable Google login, set `ALLOW_SOCIAL_LOGIN=true`, `ALLOW_SOCIAL_REGISTRATION=true`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET`
+- register the exact Google redirect URI as `${DOMAIN_SERVER}/oauth/google/callback`; LibreChat does not serve the callback at `/api/auth/oauth/google/callback`
 
 Edit `deploy/hostinger/config/librechat.yaml` if needed.
 The checked-in `aya_ops` MCP server definition includes per-user `Blue Token ID` and `Blue Token Secret` fields. Employees should save their own Blue personal token once in the Aya MCP server settings so Blue write actions are attributed to the correct user.
