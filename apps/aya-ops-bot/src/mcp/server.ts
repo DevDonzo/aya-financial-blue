@@ -462,7 +462,7 @@ function createAyaMcpServer() {
     },
     async ({ date, dateStart, dateEnd, dateLabel, focus }, extra) => {
       await requireAdminToolActor(extra.requestInfo?.headers);
-      const safeDateArgs = normalizeActivityReportDateArgs({ date, dateStart, dateEnd });
+      const safeDateArgs = normalizeWorkspaceActivityReportDateArgs({ date, dateStart, dateEnd });
       const result = await getWorkspaceActivityReport({
         ...safeDateArgs,
         dateLabel,
@@ -974,6 +974,27 @@ function normalizeActivityReportDateArgs(input: {
     dateStart: normalizeActivityReportDate(input.dateStart),
     dateEnd: normalizeActivityReportDate(input.dateEnd),
   };
+}
+
+export function normalizeWorkspaceActivityReportDateArgs(input: {
+  date?: string;
+  dateStart?: string;
+  dateEnd?: string;
+}) {
+  const dateStart = normalizeActivityReportDate(input.dateStart);
+  const dateEnd = normalizeActivityReportDate(input.dateEnd);
+
+  if (dateStart || dateEnd) {
+    return { date: undefined, dateStart, dateEnd };
+  }
+
+  const date = normalizeActivityReportDate(input.date);
+  const today = new Date().toISOString().slice(0, 10);
+
+  // For workspace "today" prompts, smaller models sometimes pass a date copied
+  // from prior client context. Default mismatched single-date calls to the
+  // server's actual current date instead of reporting stale activity as today.
+  return { date: date === today ? date : undefined, dateStart: undefined, dateEnd: undefined };
 }
 
 function normalizeActivityReportDate(value?: string) {
