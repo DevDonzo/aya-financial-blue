@@ -1537,7 +1537,7 @@ export async function listAssignedOpenRecords(input: {
     `,
     {
       companyIds: [input.companyId],
-      projectIds: input.workspaceId ? [input.workspaceId] : undefined,
+      projectIds: input.workspaceId ? [input.workspaceId] : null,
       assigneeIds: [input.assigneeId],
       limit: input.limit ?? 50,
       skip: input.skip ?? 0,
@@ -1636,7 +1636,7 @@ export async function listAssignedChecklistItems(input: {
       take: input.limit ?? 50,
       skip: input.skip ?? 0,
     },
-    input.workspaceId ? { projectId: input.workspaceId } : undefined,
+    { projectId: input.workspaceId ?? null },
   );
 
   return data.checklistItems;
