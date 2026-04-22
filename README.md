@@ -24,3 +24,4 @@ Packaging rule:
 - treat `apps/*`, `tools/blue-cli`, `scripts`, and selected `docs` as source
 - treat `.local`, build outputs, logs, uploads, and database files as local state
 \nLast verified deployment: Wed 22 Apr 2026 14:43:02 EDT
+\nCI/CD Pipeline Live Check: Wed 22 Apr 2026 15:02:02 EDT
