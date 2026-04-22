@@ -1,114 +1,88 @@
-# 🟦 Aya Copilot for Blue
+# Aya Copilot for Blue
 
-> An integrated AI-powered operational layer for Aya Financial, built on top of [Blue.cc](https://blue.cc).
+Aya Copilot is an integrated operational layer and automation framework for Aya Financial, built to extend the capabilities of the Blue CRM (Blue.cc). This repository serves as the central hub for the Aya ecosystem, providing a secure bridge between the system of record and conversational AI interfaces.
 
-[![CI/CD Pipeline](https://img.shields.io/badge/CI%2FCD-Verified-success)](https://github.com/AyaFinancial/Blue/actions)
-[![Environment](https://img.shields.io/badge/Environment-Production--Ready-blue)](https://docs.blue.cc)
-[![Stack](https://img.shields.io/badge/Stack-TypeScript%20%7C%20Go%20%7C%20React-informational)](https://github.com/AyaFinancial/Blue)
+## System Architecture
 
-This repository contains the **Aya Copilot** ecosystem—a suite of tools designed to transform CRM operations from manual data entry into conversational intelligence. It bridges the gap between the Blue CRM system of record and everyday employee workflows.
+The ecosystem is partitioned into three distinct functional layers:
 
----
+### 1. User Interface Layer (apps/librechat)
+A customized deployment of LibreChat serving as the primary engagement surface for employees. It facilitates natural language interaction with CRM data via the Model Context Protocol (MCP).
 
-## 🏗️ Architecture: The Three Layers
+### 2. Logic & Governance Layer (apps/aya-ops-bot)
+The core backend service responsible for business logic, identity resolution, and security enforcement.
+- **Identity Provider**: Maps chat sessions to Blue employee records for attributed actions.
+- **Security Guardrails**: Implements strict workspace-level scoping to prevent unauthorized writes.
+- **Audit Engine**: Maintains structured logs of all LLM-driven CRM modifications.
+- **Persistence**: Utilizes a local SQLite cache for high-performance data retrieval and team summaries.
 
-Aya is structured as a **"Face, Brain, and Tools"** ecosystem:
-
-| Layer | Component | Role | Tech Stack |
-| :--- | :--- | :--- | :--- |
-| **The Face** | `apps/librechat` | **Employee Interface**: Custom chat shell where teams interact with AI. | Node.js, React, MongoDB |
-| **The Brain** | `apps/aya-ops-bot` | **Business Logic**: Identity resolution, MCP server, safety guardrails, and audit logging. | Fastify, TypeScript, SQLite |
-| **The Tools** | `tools/blue-cli` | **Management**: High-performance Go CLI for bulk operations and Blue CRM configuration. | Go, GraphQL |
-
----
-
-## 🚀 Key Capabilities
-
-- **Natural Language CRM**: Move records, search clients, add notes, and create leads using plain English.
-- **Identity Awareness**: Automatically maps LibreChat users to Blue Employees for attributed actions and security.
-- **Enterprise Guardrails**: Strict workspace-scoping ensures AI actions only occur in approved Blue environments.
-- **Operational Audit**: Full transparency with structured logs of every prompt, response, and API call.
-- **Performance Cache**: A local SQLite-backed index of Blue data for near-instant summaries and lookups.
+### 3. Administrative Tooling (tools/blue-cli)
+A high-performance CLI written in Go, utilized for direct GraphQL API interaction, bulk record management, and system configuration.
 
 ---
 
-## 📂 Repository Structure
+## Technical Overview
 
-```text
-├── apps/
-│   ├── aya-ops-bot/       # Core TypeScript service, MCP server, & Admin UI
-│   └── librechat/         # Custom employee-facing chat application
-├── tools/
-│   ├── blue-cli/          # Go-based management CLI for Blue.cc
-│   └── bin/               # Compiled helper binaries
-├── docs/
-│   ├── architecture/      # System design and runtime flow docs
-│   ├── mcp/               # Model Context Protocol & guardrail specs
-│   └── product/           # Adoption and rollout strategy
-├── reference/
-│   ├── blue-api-docs/     # Markdown export of Blue GraphQL API
-│   └── blue-api-live-schema/ # Live GraphQL schema reference
-└── scripts/               # Helper scripts for data export and setup
-```
+### Repository Structure
+- **apps/aya-ops-bot**: Fastify (TypeScript) service, MCP implementation, and React-based administration console.
+- **apps/librechat**: Node.js/React application for employee chat workflows.
+- **tools/blue-cli**: Go-based binary for low-level CRM operations.
+- **docs/architecture**: Detailed runtime specifications and system flow diagrams.
+- **reference/**: Exported GraphQL schemas and API documentation.
+
+### Core Functionality
+- **Conversational Record Management**: Natural language commands for record creation, movement, and modification.
+- **Automated Summarization**: Daily and team-level activity reporting powered by local data indexing.
+- **Identity Propagation**: Transparent mapping of authenticated chat users to CRM actors.
+- **Operational Audit**: Comprehensive persistence of prompt-response cycles and downstream API payloads.
 
 ---
 
-## 🛠️ Getting Started
+## Deployment and Configuration
 
-### Prerequisites
-- Docker & Docker Compose
-- Node.js 18+
-- Go 1.21+ (for CLI development)
+### Requirements
+- Docker and Docker Compose (recommended for full-stack orchestration)
+- Node.js 18.x or later
+- Go 1.21.x or later (for CLI development)
 
-### Quick Start (Full Stack)
-To spin up the entire Aya ecosystem (LibreChat + Aya Ops Bot + Databases):
+### Service Initialization
+To initialize the full stack in a containerized environment:
 
 ```bash
-# Clone the repository
 git clone https://github.com/AyaFinancial/Blue.git
 cd Blue
-
-# Start the services
 docker-compose up -d
 ```
 
-### Blue CLI Installation
-For direct CRM management:
+### Management CLI Setup
+For administrative access via the command line:
+
 ```bash
-# Via Homebrew
 brew install heyblueteam/tap/blue-cli
 blue init
 ```
 
 ---
 
-## 🛡️ Safety & Governance
+## Governance and Safety
 
-Aya is built with a **"Safety-First"** philosophy for financial operations:
-- **Zero-Guessing**: Ambiguous requests trigger clarification rather than execution.
-- **Hard-Scoped**: Writes are strictly restricted to verified production-ready workspaces.
-- **Audit-Trail**: Every interaction is logged in `bot_audit_logs` for compliance review.
-
----
-
-## 📑 Documentation Index
-
-- **[System Design](apps/aya-ops-bot/docs/system-design.md)** - Technical deep-dive into the Ops Bot.
-- **[Aya Setup Guide](apps/librechat/docs/AYA_SETUP.md)** - How to configure the LibreChat interface.
-- **[CLI Reference](tools/blue-cli/README.md)** - Comprehensive guide to the `blue` command-line tool.
-- **[Deployment Guide](docs/deployment-guide.md)** - Production rollout instructions.
+The Aya ecosystem is designed with a zero-trust approach to AI-driven CRM writes:
+- **Hard-Scoped Workspaces**: Writes are restricted to explicitly allowed workspace IDs to prevent production data corruption during rollout phases.
+- **Structured Audit Logs**: Every bot interaction is logged in the `bot_audit_logs` table, ensuring compliance with internal financial reporting standards.
+- **Ambiguity Resolution**: The system is configured to request clarification rather than execute actions based on low-confidence intent matching.
 
 ---
 
-### ⚠️ Transitional Compatibility
-Compatibility symlinks remain at the top-level (`LibreChat`, `aya-ops-bot`, `blue-api-docs`, etc.) to ensure existing local commands and scripts do not break while workspace references are updated.
+## Documentation Index
+- [System Architecture Specification](apps/aya-ops-bot/docs/system-design.md)
+- [Interface Configuration Guide](apps/librechat/docs/AYA_SETUP.md)
+- [CLI Reference Manual](tools/blue-cli/README.md)
+- [Enterprise Deployment Guide](docs/deployment-guide.md)
 
 ---
 
-<p align="center">
-  Built with ❤️ by Aya Financial Engineering<br>
-  <i>Empowering teams through intelligent operations.</i>
-</p>
+### Transitional Compatibility
+Legacy symlinks at the project root (e.g., `LibreChat`, `aya-ops-bot`) are maintained to ensure backward compatibility for existing scripts and local automation.
 
 ---
 
