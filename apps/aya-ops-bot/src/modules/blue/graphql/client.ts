@@ -1636,7 +1636,7 @@ export async function listAssignedChecklistItems(input: {
       take: input.limit ?? 50,
       skip: input.skip ?? 0,
     },
-    { projectId: input.workspaceId ?? null },
+    { projectId: input.workspaceId },
   );
 
   return data.checklistItems;
