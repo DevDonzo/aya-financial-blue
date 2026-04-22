@@ -353,6 +353,31 @@ async function executePlan(input: {
   const { actor, transport, blueAuth, plan } = input;
 
   switch (plan.intent) {
+    case "help.overview": {
+      return {
+        responseText: [
+          "I can help with Aya/Blue work like client status, comments, assignments, follow-ups, activity, and reporting.",
+          "Examples:",
+          "- show my assignments",
+          "- what assignments does Sarah have?",
+          "- who moved clients today?",
+          "- updates on Fatima Hammou",
+          "- show comments for Fatima Hammou",
+          "- which records are missing phone?",
+          "- move Fatima Hammou to underwriting",
+          "- assign Fatima Hammou to Hamza",
+        ].join("\n"),
+        data: {
+          examples: [
+            "show my assignments",
+            "what assignments does Sarah have?",
+            "who moved clients today?",
+            "updates on Fatima Hammou",
+          ],
+        },
+      };
+    }
+
     case "activity.employee_report": {
       const focus =
         plan.parameters.activityFocus === "comments" ||
@@ -1008,6 +1033,7 @@ async function recordAudit(input: {
 
 function getAuditAdapter(intent: IntentName) {
   switch (intent) {
+    case "help.overview":
     case "identity.self":
     case "summary.employee_day":
     case "assignments.report":
@@ -1030,6 +1056,8 @@ function getAuditAdapter(intent: IntentName) {
 
 function getAuditCommandName(intent: IntentName) {
   switch (intent) {
+    case "help.overview":
+      return "helpOverview";
     case "records.move":
       return "moveTodo";
     case "records.create":

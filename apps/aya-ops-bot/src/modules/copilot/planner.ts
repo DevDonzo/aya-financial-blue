@@ -76,6 +76,7 @@ export function detectIntent(request: IntentRequest): IntentMatch | null {
 const INTENT_RESOLVERS: Array<
   (request: IntentPlannerRequest) => IntentCandidate | null
 > = [
+  resolveHelpIntent,
   resolveIdentityIntent,
   resolveMentionsIntent,
   resolveReportingOverviewIntent,
@@ -111,6 +112,18 @@ function activityTest(message: string, source: string) {
   return new RegExp(`${source}${OPTIONAL_ACTIVITY_MESSAGE_END_PATTERN}`, "i").test(
     message,
   );
+}
+
+function resolveHelpIntent(
+  request: IntentPlannerRequest,
+): IntentCandidate | null {
+  const message = normalize(request.message);
+
+  if (!HELP_MESSAGES.has(message)) {
+    return null;
+  }
+
+  return candidate("help.overview", 100, 0.98, {}, ["help:overview"]);
 }
 
 function resolveIdentityIntent(
@@ -169,6 +182,7 @@ function resolveTeamSummaryIntent(
 
   if (
     TEAM_SUMMARY_MESSAGES.has(message) ||
+    /^who did what today\??$/.test(message) ||
     ((message.includes("what changed") || message.includes("what happened")) &&
       message.includes("today"))
   ) {
@@ -240,6 +254,7 @@ function resolveWorkspaceActivityIntent(
 
   if (
     activityTest(rawMessage, String.raw`^who (?:made|added|left) comments`) ||
+    activityTest(rawMessage, String.raw`^who commented`) ||
     activityTest(rawMessage, String.raw`^show(?: me)? who commented`)
   ) {
     return candidate(
@@ -396,6 +411,10 @@ function resolveEmployeeActivityIntent(
     )?.[1]?.trim() ??
     activityMatch(
       rawMessage,
+      String.raw`^(?:show(?: me)?|tell me|give me)\s+(.+?)\s+activity`,
+    )?.[1]?.trim() ??
+    activityMatch(
+      rawMessage,
       String.raw`^(?:show(?: me)?|tell me|give me)\s+(.+?)'?s activity`,
     )?.[1]?.trim() ??
     activityMatch(rawMessage, String.raw`^what exactly did (.+) do`)?.[1]?.trim() ??
@@ -439,6 +458,7 @@ function resolveEmployeeActivityIntent(
       rawMessage,
       String.raw`^how many (?:clients|files|records|people) did (.+) move`,
     )?.[1]?.trim() ??
+    activityMatch(rawMessage, String.raw`^what moves did (.+) make`)?.[1]?.trim() ??
     activityMatch(rawMessage, String.raw`^(?:show(?: me)?|list)\s+(.+?)'?s moves`)?.[1]?.trim();
 
   if (movesTarget && !TEAM_TARGETS.has(normalize(movesTarget))) {
@@ -492,6 +512,26 @@ function resolveRecordActivityIntent(
     rawMessage,
     request.nowIso,
   );
+
+  const contextualMoveQuery =
+    activityMatch(
+      rawMessage,
+      String.raw`^where was (this (?:client|file|lead|record)) moved`,
+    )?.[1]?.trim();
+
+  if (contextualMoveQuery) {
+    return buildRecordActivityCandidate(
+      contextualMoveQuery,
+      request,
+      "moves",
+      94,
+      0.89,
+      "Which client should I check moves for?",
+      "activity:record:moves",
+      dateRange,
+    );
+  }
+
   const timelineQuery =
     activityMatch(
       rawMessage,
@@ -515,6 +555,10 @@ function resolveRecordActivityIntent(
     activityMatch(
       rawMessage,
       String.raw`^(?:who (?:worked on|touched)|who has touched|show(?: me)? activity on|what happened on|what changed on)\s+(.+?)`,
+    )?.[1]?.trim() ??
+    activityMatch(
+      rawMessage,
+      String.raw`^(?:what happened with|what happened to|what happened for|where was)\s+(.+?)`,
     )?.[1]?.trim() ??
     activityMatch(
       rawMessage,
@@ -557,6 +601,10 @@ function resolveRecordActivityIntent(
     activityMatch(
       rawMessage,
       String.raw`^who moved (this (?:client|file|lead|record))`,
+    )?.[1]?.trim() ??
+    activityMatch(
+      rawMessage,
+      String.raw`^where was (this (?:client|file|lead|record)) moved`,
     )?.[1]?.trim() ??
     activityMatch(rawMessage, String.raw`^who moved\s+(.+?)`)?.[1]?.trim();
 
@@ -626,16 +674,21 @@ function resolveExceptionReportIntent(
 
   const rawMessage = request.message.trim();
   const message = normalize(rawMessage);
+  const isClientMissingDocsQuestion =
+    /\bdocs?\b.*\bmissing\b.*\b(?:for|from|on)\b/.test(message);
   const isExceptionMessage =
-    /\b(exception|exceptions|incomplete|missing|required fields?|empty fields?|blank fields?|problems?)\b/.test(
+    !isClientMissingDocsQuestion &&
+    (/\b(exception|exceptions|incomplete|missing|required fields?|empty fields?|blank fields?|problems?)\b/.test(
       message,
     ) ||
-    /^which files have no\b/.test(message) ||
-    /^which files are missing\b/.test(message) ||
-    /^show me files missing\b/.test(message) ||
-    /^which records have no\b/.test(message) ||
-    /^which records are missing\b/.test(message) ||
-    /^show me records missing\b/.test(message);
+      /^list unassigned (?:records|files|clients|leads)\b/.test(message) ||
+      /^show(?: me)? unassigned (?:records|files|clients|leads)\b/.test(message) ||
+      /^which files have no\b/.test(message) ||
+      /^which files are missing\b/.test(message) ||
+      /^show me files missing\b/.test(message) ||
+      /^which records have no\b/.test(message) ||
+      /^which records are missing\b/.test(message) ||
+      /^show me records missing\b/.test(message));
 
   if (!isExceptionMessage) {
     return null;
@@ -672,11 +725,13 @@ function resolveAssignmentReportIntent(
   const rawMessage = request.message.trim();
   const message = normalize(rawMessage);
   const referencesAssignments =
-    /\b(assignments?|checklist items?|checklist tasks?|tasks assigned|assigned tasks?)\b/.test(
+    /\b(assignments?|checklist items?|checklist tasks?|tasks assigned|assigned tasks?|tasks?)\b/.test(
       message,
-    );
+    ) ||
+    /^what did .+ complete\??$/.test(message) ||
+    /^what did .+ finish\??$/.test(message);
   const asksForAssignmentReport =
-    /\b(what|show|which|list|who|have|has|did|completed?|done|open|pending|todo|to do|see|view)\b/.test(
+    /\b(what|show|which|list|who|have|has|did|completed?|done|finished?|open|pending|todo|to do|see|view)\b/.test(
       message,
     );
   const asksAboutAssignmentTooling =
@@ -752,19 +807,32 @@ function resolveWorkloadIntent(
   const openFilesMatch = message.match(
     /^(?:show|list)(?: me)?\s+(.+?)'?s open files[.?!]?$/,
   );
-  if (!openFilesMatch) {
-    return null;
+  if (openFilesMatch) {
+    return candidate(
+      "records.list_assigned",
+      84,
+      0.81,
+      {
+        employeeName: openFilesMatch[1].trim(),
+      },
+      ["workload:open-files"],
+    );
   }
 
-  return candidate(
-    "records.list_assigned",
-    84,
-    0.81,
-    {
-      employeeName: openFilesMatch[1].trim(),
-    },
-    ["workload:open-files"],
-  );
+  const workloadMatch = message.match(/^(?:show|list)(?: me)?\s+(.+?)\s+workload[.?!]?$/);
+  if (workloadMatch) {
+    return candidate(
+      "records.list_assigned",
+      84,
+      0.81,
+      {
+        employeeName: normalizeEmployeeTarget(workloadMatch[1].trim(), request),
+      },
+      ["workload:employee"],
+    );
+  }
+
+  return null;
 }
 
 function resolveFollowUpIntent(
@@ -778,6 +846,8 @@ function resolveFollowUpIntent(
     "which files need follow up today",
     "which of my files are stale",
     "what in my pipeline is stale",
+    "which files are overdue",
+    "which records are stale",
   ];
 
   if (selfSignals.some((signal) => message.includes(signal))) {
@@ -1162,6 +1232,9 @@ function resolveFocusedDetailIntent(
       )?.[1]
       ?.trim() ??
     rawMessage
+      .match(/^(?:what blockers? (?:are|is) (?:on|for))\s+(.+?)[.?!]?$/i)?.[1]
+      ?.trim() ??
+    rawMessage
       .match(/^(?:show|give me)\s+(?:the )?blockers?\s+(?:for|on)\s+(.+?)[.?!]?$/i)?.[1]
       ?.trim();
 
@@ -1232,7 +1305,7 @@ function resolveDetailIntent(
   const callPrepQuery =
     rawMessage
       .match(
-        /^(?:prep me for a call with|call prep for|brief me on|give me context before (?:a )?call with)\s+(.+?)[.?!]?$/i,
+        /^(?:prep me for a call with|prepare me for a call with|call prep for|brief me on|give me context before (?:a )?call with)\s+(.+?)[.?!]?$/i,
       )?.[1]
       ?.trim() ??
     rawMessage
@@ -1282,7 +1355,7 @@ function resolveDetailIntent(
   const briefingQuery =
     rawMessage
       .match(
-        /^(?:what(?:'s| is)\s+(?:going on|up)\s+with|status of|update on|tell me about)\s+(.+?)[.?!]?$/i,
+        /^(?:what(?:'s| is)\s+(?:going on|up)\s+with|status of|what(?:'s| is) the status of|updates? on|tell me about)\s+(.+?)[.?!]?$/i,
       )?.[1]
       ?.trim() ??
     rawMessage
@@ -1552,7 +1625,7 @@ function normalizeEmployeeTarget(
 }
 
 function resolveExceptionFocus(message: string) {
-  if (/\bassignment|unassigned\b/.test(message)) {
+  if (/\bassignment|unassigned\b|assigned employee\b/.test(message)) {
     return "assignment";
   }
 
@@ -1588,7 +1661,7 @@ function resolveExceptionFocus(message: string) {
 }
 
 function resolveAssignmentStatus(message: string) {
-  if (/\b(completed?|done|finished|did)\b/.test(message)) {
+  if (/\b(completed?|done|finished?|finish|did)\b/.test(message)) {
     return "completed";
   }
 
@@ -1604,11 +1677,17 @@ function resolveAssignmentEmployeeTarget(
   request: IntentPlannerRequest,
 ) {
   const message = normalize(rawMessage);
-  if (/\b(my|me|i have|i need|am i assigned)\b/.test(message)) {
+  if (
+    /\b(my|me|i have|i need|am i assigned)\b/.test(message) ||
+    /^what tasks (?:did|do) i\b/.test(message)
+  ) {
     return request.actor.displayName;
   }
 
   const match =
+    rawMessage.match(/^what did\s+(.+?)\s+(?:complete|finish|do)[.?!]?$/i)
+      ?.[1]
+      ?.trim() ??
     rawMessage.match(/\b(?:for|assigned to|does|did)\s+(.+?)(?:\s+(?:have|has|need|completed?|done|open|pending|to do|assignments?|tasks?)\b|[.?!]?$)/i)
       ?.[1]
       ?.trim() ??
@@ -1776,4 +1855,15 @@ const ROUTING_EXCLUSIONS = new Set([
   "the team",
   "team",
   "we",
+]);
+
+const HELP_MESSAGES = new Set([
+  "hello",
+  "hi",
+  "hey",
+  "help",
+  "what can you do",
+  "what can you do?",
+  "how can you help",
+  "how can you help?",
 ]);

@@ -11,6 +11,7 @@ export type ActivitySource =
   | "slack";
 
 export type IntentName =
+  | "help.overview"
   | "identity.self"
   | "activity.employee_report"
   | "activity.record_report"
