@@ -4,12 +4,39 @@ on:
   push:
     branches: [ main ]
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            apps/aya-ops-bot/package-lock.json
+            apps/aya-ops-bot/admin-ui/package-lock.json
+
+      - name: Install Aya dependencies
+        working-directory: apps/aya-ops-bot
+        run: |
+          npm ci
+          npm --prefix admin-ui ci
+
+      - name: Test Aya backend
+        working-directory: apps/aya-ops-bot
+        run: npm test
+
+      - name: Build Aya backend and admin UI
+        working-directory: apps/aya-ops-bot
+        run: npm run build
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
@@ -18,9 +45,32 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 30m
+          script_stop: true
           script: |
+            set -eu
             cd ~/Blue
             git fetch origin main
             git reset --hard origin/main
             cd apps/aya-ops-bot/deploy/hostinger
             docker compose up -d --build
+            for i in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:3010/health >/dev/null; then
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                docker compose logs --tail=120 aya
+                exit 1
+              fi
+              sleep 2
+            done
+            for i in $(seq 1 30); do
+              if curl -fsSI http://127.0.0.1:3080 >/dev/null; then
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                docker compose logs --tail=120 librechat
+                exit 1
+              fi
+              sleep 2
+            done
+            docker compose ps
