@@ -17,8 +17,10 @@ jobs:
           host: 187.77.21.222
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 30m
           script: |
             cd ~/Blue
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
             cd apps/aya-ops-bot/deploy/hostinger
             docker compose up -d --build
