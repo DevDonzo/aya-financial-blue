@@ -145,6 +145,60 @@ const server = setupServer(
       });
     }
 
+    if (body.query.includes("query AssignedChecklistItems")) {
+      return HttpResponse.json({
+        data: {
+          checklistItems: {
+            items: [
+              {
+                id: "checklist_item_1",
+                uid: "checklist_item_uid_1",
+                title: "Employment Letter",
+                done: false,
+                duedAt: "2026-03-26T00:00:00.000Z",
+                updatedAt: "2026-03-25T00:00:00.000Z",
+                users: [
+                  {
+                    id: "user_1",
+                    uid: "user_uid_1",
+                    email: "sarah@ayafinancial.com",
+                    firstName: "Sarah",
+                    lastName: "Khan",
+                    fullName: "Sarah Khan",
+                    timezone: "America/Toronto",
+                    updatedAt: "2026-03-25T00:00:00.000Z",
+                  },
+                ],
+                checklist: {
+                  id: "checklist_1",
+                  title: "AYA Checklist V1",
+                  todo: {
+                    id: "todo_1",
+                    uid: "todo_uid_1",
+                    title: "Sheraz File",
+                    todoList: {
+                      id: "list_1",
+                      uid: "list_uid_1",
+                      title: "Underwriting",
+                      position: 1,
+                      updatedAt: "2026-03-25T00:00:00.000Z",
+                    },
+                  },
+                },
+              },
+            ],
+            pageInfo: {
+              totalItems: 1,
+              hasNextPage: false,
+              hasPreviousPage: false,
+              page: 1,
+              perPage: 50,
+            },
+          },
+        },
+      });
+    }
+
     if (body.query.includes("query ReportingCapability")) {
       return HttpResponse.json({
         data: {
@@ -421,6 +475,33 @@ describe("blue graphql client mutations and workload query", () => {
       expect(result.items).toHaveLength(1);
       expect(result.pageInfo.totalItems).toBe(101);
       expect((requests[0]?.variables.limit as number) ?? 0).toBe(50);
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it("queries checklist assignments by assignee and done status", async () => {
+    const env = createTestEnvironment();
+    try {
+      const { listAssignedChecklistItems } = await import(
+        "../../../src/modules/blue/graphql/client.js"
+      );
+      const result = await listAssignedChecklistItems({
+        workspaceId: "cmn524yr800e101mh7kn44mhf",
+        assigneeId: "user_1",
+        done: false,
+        todoDone: false,
+      });
+
+      expect(result.items[0]?.title).toBe("Employment Letter");
+      expect(result.items[0]?.checklist.todo.title).toBe("Sheraz File");
+      expect(requests[0]?.variables.filter).toEqual({
+        assigneeIds: ["user_1"],
+        done: false,
+        excludeArchivedProjects: true,
+        todoDone: false,
+      });
+      expect((requests[0]?.variables.take as number) ?? 0).toBe(50);
     } finally {
       env.cleanup();
     }

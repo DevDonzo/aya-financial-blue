@@ -33,6 +33,8 @@ function normalizeBlueActivityItem(item: BlueActivityEvent): NormalizedActivityE
   return {
     id: `blue_${item.id}`,
     employeeId: item.createdBy?.id,
+    workspaceId: item.project?.id,
+    projectName: item.project?.name,
     source: "blue",
     sourceEventId: item.id,
     actionType: item.category,
@@ -50,14 +52,14 @@ function normalizeBlueActivityItem(item: BlueActivityEvent): NormalizedActivityE
 }
 
 export async function ingestBlueActivity(limit = 100) {
-  const state = await getBlueSyncState(config.BLUE_WORKSPACE_ID, "activity");
+  const syncKey = config.BLUE_COMPANY_ID || config.BLUE_WORKSPACE_ID;
+  const state = await getBlueSyncState(syncKey, "activity");
   const startDate = state?.last_seen_updated_at
     ? new Date(
         new Date(state.last_seen_updated_at).getTime() - 5 * 60 * 1000,
       ).toISOString()
     : null;
   const items = await fetchWorkspaceActivity({
-    workspaceId: config.BLUE_WORKSPACE_ID,
     limit,
     startDate,
   });
@@ -104,7 +106,7 @@ export async function ingestBlueActivity(limit = 100) {
       .at(-1) ?? state?.last_seen_updated_at ?? null;
 
   await upsertBlueSyncState({
-    workspaceId: config.BLUE_WORKSPACE_ID,
+    workspaceId: syncKey,
     entityType: "activity",
     lastIncrementalSyncAt: new Date().toISOString(),
     lastSeenUpdatedAt,

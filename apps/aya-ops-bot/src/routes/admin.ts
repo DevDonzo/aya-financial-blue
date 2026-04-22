@@ -54,7 +54,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/admin/api/overview", { preHandler: [app.requireRoles(["admin"])] }, async (request) => {
     const date =
-      (request.query as { date?: string } | undefined)?.date ?? getTorontoDateString();
+      (request.query as { date?: string } | undefined)?.date ?? getIsoDateString();
     const [syncStates, webhookSubscriptions] = await Promise.all([
       listBlueSyncStates(config.BLUE_WORKSPACE_ID),
       listBlueWebhookSubscriptions(config.BLUE_WORKSPACE_ID),
@@ -167,13 +167,8 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   );
 };
 
-function getTorontoDateString() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Toronto",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+function getIsoDateString() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function safeParseJson(value: string | null) {

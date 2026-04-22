@@ -61,6 +61,7 @@ export const pruneExpiredAuthSessions = authRepo.pruneExpiredAuthSessions;
 
 export const insertActivityEvent = activityRepo.insertActivityEvent;
 export const listEventsForEmployeeDay = activityRepo.listEventsForEmployeeDay;
+export const listEventsForEmployeeInRange = activityRepo.listEventsForEmployeeInRange;
 export const countEventsBySourceForEmployeeDay =
   activityRepo.countEventsBySourceForEmployeeDay;
 export const countEventsByActionForEmployeeDay =
@@ -69,6 +70,7 @@ export const listEventsForDay = activityRepo.listEventsForDay;
 export const countEventsByEmployeeForDay = activityRepo.countEventsByEmployeeForDay;
 export const listEmployeesWithoutActivityForDay =
   activityRepo.listEmployeesWithoutActivityForDay;
+export const listMentionsForUser = activityRepo.listMentionsForUser;
 
 export const insertBotAuditLog = auditRepo.insertBotAuditLog;
 export const getAdminDashboardOverview = auditRepo.getAdminDashboardOverview;

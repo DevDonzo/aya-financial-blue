@@ -79,6 +79,8 @@ export async function runMigrations() {
     CREATE TABLE IF NOT EXISTS activity_events (
       id TEXT PRIMARY KEY,
       employee_id TEXT,
+      workspace_id TEXT,
+      project_name TEXT,
       source TEXT NOT NULL,
       source_event_id TEXT,
       action_type TEXT NOT NULL,
@@ -207,6 +209,8 @@ export async function runMigrations() {
   ensureColumn("blue_records_cache", "deleted_at", "TEXT");
   ensureColumn("bot_audit_logs", "request_json", "TEXT");
   ensureColumn("bot_audit_logs", "response_json", "TEXT");
+  ensureColumn("activity_events", "workspace_id", "TEXT");
+  ensureColumn("activity_events", "project_name", "TEXT");
 
   sqlite.exec(`
     CREATE INDEX IF NOT EXISTS idx_blue_records_cache_contact_email

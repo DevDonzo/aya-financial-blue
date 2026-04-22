@@ -19,13 +19,18 @@ import { resolveActorIdentity } from "../identity/service.js";
 import {
   addCommentToClient,
   answerReportingQuestion,
+  assignRecord,
+  assignTask,
   createClientRecord,
   getClientComments,
   getClientDetail,
+  getEmployeeAssignmentReport,
   getEmployeeActivityReport,
   getEmployeeDaySummary,
   getEmployeeFollowUpQueue,
   getEmployeeWorkload,
+  getUserMentionsReport,
+  getUserActivityHistory,
   getRecordActivityReport,
   getWorkspaceExceptionReport,
   getReportingOverview,
@@ -311,6 +316,15 @@ function enforceIntentPermissions(actor: EmployeeIdentity, plan: IntentPlan) {
   }
 
   if (
+    plan.intent === "assignments.report" &&
+    typeof plan.parameters.employeeName === "string" &&
+    plan.parameters.employeeName.trim().toLowerCase() !==
+      actor.displayName.trim().toLowerCase()
+  ) {
+    throw new PermissionError();
+  }
+
+  if (
     plan.intent === "records.list_assigned" &&
     typeof plan.parameters.employeeName === "string" &&
     plan.parameters.employeeName.trim().toLowerCase() !==
@@ -505,6 +519,50 @@ async function executePlan(input: {
       };
     }
 
+    case "activity.mentions": {
+      const result = await getUserMentionsReport({
+        employeeName:
+          typeof plan.parameters.employeeName === "string"
+            ? plan.parameters.employeeName
+            : undefined,
+        dateStart:
+          typeof plan.parameters.dateStart === "string"
+            ? plan.parameters.dateStart
+            : undefined,
+        dateEnd:
+          typeof plan.parameters.dateEnd === "string"
+            ? plan.parameters.dateEnd
+            : undefined,
+        actor,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "activity.user_history": {
+      const result = await getUserActivityHistory({
+        employeeName:
+          typeof plan.parameters.employeeName === "string"
+            ? plan.parameters.employeeName
+            : undefined,
+        dateStart:
+          typeof plan.parameters.dateStart === "string"
+            ? plan.parameters.dateStart
+            : undefined,
+        dateEnd:
+          typeof plan.parameters.dateEnd === "string"
+            ? plan.parameters.dateEnd
+            : undefined,
+        transport,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
     case "summary.employee_day": {
       const result = await getEmployeeDaySummary({
         employeeId:
@@ -609,6 +667,30 @@ async function executePlan(input: {
       };
     }
 
+    case "assignments.report": {
+      const status =
+        plan.parameters.assignmentStatus === "completed" ||
+        plan.parameters.assignmentStatus === "all"
+          ? plan.parameters.assignmentStatus
+          : "open";
+      const result = await getEmployeeAssignmentReport({
+        employeeId:
+          typeof plan.parameters.assigneeId === "string"
+            ? plan.parameters.assigneeId
+            : undefined,
+        employeeName:
+          typeof plan.parameters.employeeName === "string"
+            ? plan.parameters.employeeName
+            : actor.displayName,
+        status,
+        transport,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
     case "records.follow_up": {
       const result = await getEmployeeFollowUpQueue({
         employeeId:
@@ -688,6 +770,42 @@ async function executePlan(input: {
             ? plan.parameters.recordQuery
             : undefined,
         targetListQuery: String(plan.parameters.targetListQuery ?? ""),
+        useActiveRecordContext: plan.parameters.useActiveRecordContext === true,
+        actor,
+        blueAuth,
+        transport,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "records.assign": {
+      const result = await assignRecord({
+        entityQuery:
+          typeof plan.parameters.entityQuery === "string"
+            ? plan.parameters.entityQuery
+            : undefined,
+        assigneeName: String(plan.parameters.assigneeName ?? ""),
+        useActiveRecordContext: plan.parameters.useActiveRecordContext === true,
+        actor,
+        blueAuth,
+        transport,
+      });
+      return {
+        responseText: result.responseText,
+        data: result,
+      };
+    }
+
+    case "tasks.assign": {
+      const result = await assignTask({
+        entityQuery:
+          typeof plan.parameters.entityQuery === "string"
+            ? plan.parameters.entityQuery
+            : undefined,
+        assigneeName: String(plan.parameters.assigneeName ?? ""),
         useActiveRecordContext: plan.parameters.useActiveRecordContext === true,
         actor,
         blueAuth,
@@ -892,6 +1010,7 @@ function getAuditAdapter(intent: IntentName) {
   switch (intent) {
     case "identity.self":
     case "summary.employee_day":
+    case "assignments.report":
     case "activity.employee_report":
     case "activity.record_report":
     case "activity.workspace_report":
@@ -923,6 +1042,8 @@ function getAuditCommandName(intent: IntentName) {
     case "records.list_assigned":
     case "records.follow_up":
       return "todoQueries.todos";
+    case "assignments.report":
+      return "checklistItems";
     case "reporting.overview":
       return "getReportingOverview";
     case "reporting.question":

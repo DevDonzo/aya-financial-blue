@@ -78,6 +78,8 @@ CREATE INDEX IF NOT EXISTS idx_blue_records_cache_normalized
 CREATE TABLE IF NOT EXISTS activity_events (
   id TEXT PRIMARY KEY,
   employee_id TEXT,
+  workspace_id TEXT,
+  project_name TEXT,
   source TEXT NOT NULL,
   source_event_id TEXT,
   action_type TEXT NOT NULL,

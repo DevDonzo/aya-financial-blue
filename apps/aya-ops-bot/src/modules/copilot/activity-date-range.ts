@@ -13,7 +13,7 @@ export function resolveActivityDateRangeFromMessage(
   nowIso: string,
 ): ActivityDateRange {
   const normalized = message.trim().toLowerCase();
-  const today = getTorontoIsoDate(nowIso);
+  const today = getIsoDate(nowIso);
 
   const explicitRange = extractExplicitIsoRange(normalized);
   if (explicitRange) {
@@ -158,13 +158,8 @@ function extractTrailingDays(value: string) {
   return Math.min(days, 90);
 }
 
-function getTorontoIsoDate(nowIso: string) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Toronto",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(nowIso));
+function getIsoDate(nowIso: string) {
+  return new Date(nowIso).toISOString().slice(0, 10);
 }
 
 function shiftIsoDate(date: string, days: number) {

@@ -8,13 +8,17 @@ import { AppError } from "../app/errors.js";
 import { createId, insertBotAuditLog } from "../db.js";
 import {
   addCommentToClient,
+  assignRecord,
+  assignTask,
   createClientRecord,
   getClientComments,
   getClientDetail,
+  getEmployeeAssignmentReport,
   getEmployeeActivityReport,
   getEmployeeDaySummary,
   getEmployeeFollowUpQueue,
   getEmployeeWorkload,
+  getUserMentionsReport,
   getRecordActivityReport,
   getTeamDaySummary,
   getWorkspaceActivityReport,
@@ -344,7 +348,7 @@ function createAyaMcpServer() {
         transport: "mcp",
       });
       return {
-        content: [{ type: "text", text: result.responseText }],
+        content: [{ type: "text", text: result.responseText ?? "Record assigned." }],
         structuredContent: toStructuredContent(result),
       };
     },
@@ -418,7 +422,7 @@ function createAyaMcpServer() {
         focus,
       });
       return {
-        content: [{ type: "text", text: result.responseText }],
+        content: [{ type: "text", text: result.responseText ?? "Task assigned." }],
         structuredContent: toStructuredContent(result),
       };
     },
@@ -650,6 +654,83 @@ function createAyaMcpServer() {
   );
 
   server.registerTool(
+    "aya_get_employee_assignments",
+    {
+      title: "Employee Checklist Assignments",
+      description:
+        "Show Blue checklist assignment items assigned to one internal employee, including open work and completed checklist items. Use this when the user asks about the Assignments tab, assigned tasks, checklist tasks, what someone has to do, or what assignments someone completed.",
+      inputSchema: {
+        employeeId: z.string().optional(),
+        employeeEmail: z.string().email().optional(),
+        employeeName: z.string().optional(),
+        status: z.enum(["open", "completed", "all"]).optional(),
+      },
+    },
+    async ({ employeeId, employeeEmail, employeeName, status }, extra) => {
+      const actor = await getHeaderActor(extra.requestInfo?.headers);
+      const targetName = employeeName ?? actor?.displayName;
+      if (
+        actor &&
+        actor.roleName !== "admin" &&
+        targetName &&
+        targetName.trim().toLowerCase() !== actor.displayName.trim().toLowerCase()
+      ) {
+        throw new AppError(
+          "Assignment reports for other employees require admin access.",
+          {
+            statusCode: 403,
+            code: "PERMISSION_DENIED",
+          },
+        );
+      }
+
+      const result = await getEmployeeAssignmentReport({
+        employeeId: employeeId ?? actor?.employeeId,
+        employeeEmail: employeeEmail ?? actor?.email,
+        employeeName: targetName,
+        status,
+      });
+      return {
+        content: [{ type: "text", text: result.responseText }],
+        structuredContent: toStructuredContent(result),
+      };
+    },
+  );
+
+  server.registerTool(
+    "aya_get_user_mentions",
+    {
+      title: "Get My Mentions",
+      description:
+        "Show recent comments where you were mentioned using @Name. This helps you track feedback, requests, or questions directed at you by other team members.",
+      inputSchema: {
+        employeeName: z.string().optional().describe("Optional other employee name to check mentions for (requires admin access)"),
+        dateStart: z.string().optional().describe("YYYY-MM-DD"),
+        dateEnd: z.string().optional().describe("YYYY-MM-DD"),
+      },
+    },
+    async ({ employeeName, dateStart, dateEnd }, extra) => {
+      const actor = await requireToolActor(extra.requestInfo?.headers);
+      
+      if (employeeName && actor.roleName !== "admin" && employeeName.toLowerCase() !== actor.displayName.toLowerCase()) {
+         throw new Error("Checking mentions for other employees requires admin access.");
+      }
+
+      const result = await getUserMentionsReport({
+        employeeName,
+        dateStart,
+        dateEnd,
+        actor,
+      });
+
+      return {
+        content: [{ type: "text", text: result.responseText }],
+        structuredContent: toStructuredContent(result),
+      };
+    },
+  );
+
+  server.registerTool(
     "aya_create_client_record",
     {
       title: "Create Client Record",
@@ -782,6 +863,76 @@ function createAyaMcpServer() {
           addCommentToClient({
             recordQuery,
             text,
+            actor,
+            blueAuth,
+          }),
+      });
+      return {
+        content: [{ type: "text", text: result.responseText }],
+        structuredContent: toStructuredContent(result),
+      };
+    },
+  );
+
+  server.registerTool(
+    "aya_assign_record",
+    {
+      title: "Assign Client Record",
+      description:
+        "Assign a Blue CRM record to a specific employee. Use this when the user says 'assign X to Y' or 'give X to Y'.",
+      inputSchema: {
+        entityQuery: z.string().min(1).describe("The record/client name or query"),
+        assigneeName: z.string().min(1).describe("The name of the employee to assign it to"),
+      },
+    },
+    async ({ entityQuery, assigneeName }, extra) => {
+      const actor = await requireToolActor(extra.requestInfo?.headers);
+      const blueAuth = getHeaderBlueAuth(extra.requestInfo?.headers);
+      const result = await runAuditedMcpTool({
+        actor,
+        toolName: "aya_assign_record",
+        intent: "records.assign",
+        inboundText: `assign ${entityQuery} to ${assigneeName}`,
+        requestJson: { entityQuery, assigneeName },
+        execute: () =>
+          assignRecord({
+            entityQuery,
+            assigneeName,
+            actor,
+            blueAuth,
+          }),
+      });
+      return {
+        content: [{ type: "text", text: result.responseText }],
+        structuredContent: toStructuredContent(result),
+      };
+    },
+  );
+
+  server.registerTool(
+    "aya_assign_task",
+    {
+      title: "Assign Checklist Task",
+      description:
+        "Assign a specific checklist item (task) within a record to an employee. Use this when the user says 'assign task X to Y'.",
+      inputSchema: {
+        entityQuery: z.string().min(1).describe("The task name/query"),
+        assigneeName: z.string().min(1).describe("The name of the employee to assign it to"),
+      },
+    },
+    async ({ entityQuery, assigneeName }, extra) => {
+      const actor = await requireToolActor(extra.requestInfo?.headers);
+      const blueAuth = getHeaderBlueAuth(extra.requestInfo?.headers);
+      const result = await runAuditedMcpTool({
+        actor,
+        toolName: "aya_assign_task",
+        intent: "tasks.assign",
+        inboundText: `assign task ${entityQuery} to ${assigneeName}`,
+        requestJson: { entityQuery, assigneeName },
+        execute: () =>
+          assignTask({
+            entityQuery,
+            assigneeName,
             actor,
             blueAuth,
           }),

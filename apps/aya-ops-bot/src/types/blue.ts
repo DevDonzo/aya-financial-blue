@@ -67,6 +67,36 @@ export interface BlueRecord {
   users?: BlueUser[];
   tags?: BlueTag[];
   customFields?: BlueTodoCustomField[];
+  checklists?: Array<{
+    id: string;
+    title: string;
+    items: Array<{
+      id: string;
+      uid?: string;
+      title: string;
+      done: boolean;
+      users?: BlueUser[];
+    }>;
+  }>;
+}
+
+export interface BlueChecklistItem {
+  id: string;
+  uid?: string;
+  title: string;
+  done: boolean;
+  duedAt?: string | null;
+  updatedAt: string;
+  users?: BlueUser[];
+  checklist: {
+    id?: string;
+    title: string;
+    todo: {
+      id: string;
+      title: string;
+      todoList: BlueTodoList;
+    };
+  };
 }
 
 export interface BlueActivityEvent {
@@ -191,11 +221,22 @@ export type BlueWebhookEventType =
   | "TODO_MOVED"
   | "TODO_NAME_CHANGED"
   | "TODO_DONE_STATUS_UPDATED"
+  | "TODO_DUE_DATE_ADDED"
+  | "TODO_DUE_DATE_UPDATED"
+  | "TODO_DUE_DATE_REMOVED"
   | "TODO_ASSIGNEE_ADDED"
   | "TODO_ASSIGNEE_REMOVED"
   | "TODO_TAG_ADDED"
   | "TODO_TAG_REMOVED"
   | "TODO_CUSTOM_FIELD_UPDATED"
+  | "TODO_CHECKLIST_ITEM_CREATED"
+  | "TODO_CHECKLIST_ITEM_DELETED"
+  | "TODO_CHECKLIST_ITEM_DUE_DATE_ADDED"
+  | "TODO_CHECKLIST_ITEM_DUE_DATE_UPDATED"
+  | "TODO_CHECKLIST_ITEM_DUE_DATE_REMOVED"
+  | "TODO_CHECKLIST_ITEM_ASSIGNEE_ADDED"
+  | "TODO_CHECKLIST_ITEM_ASSIGNEE_REMOVED"
+  | "TODO_CHECKLIST_ITEM_DONE_STATUS_UPDATED"
   | "COMMENT_CREATED"
   | "COMMENT_UPDATED"
   | "COMMENT_DELETED";

@@ -1,7 +1,7 @@
 import { sql } from "kysely";
 
 import { db } from "../kysely.js";
-import type { NormalizedActivityEvent } from "../../../types/blue.js";
+import type { NormalizedActivityEvent } from "../../../domain/types.js";
 
 export async function insertActivityEvent(event: NormalizedActivityEvent) {
   const result = await db
@@ -9,6 +9,8 @@ export async function insertActivityEvent(event: NormalizedActivityEvent) {
     .values({
       id: event.id,
       employee_id: event.employeeId ?? null,
+      workspace_id: event.workspaceId ?? null,
+      project_name: event.projectName ?? null,
       source: event.source,
       source_event_id: event.sourceEventId ?? null,
       action_type: event.actionType,
@@ -43,6 +45,42 @@ export async function listEventsForEmployeeDay(employeeId: string, date: string)
     .where("ae.employee_id", "=", employeeId)
     .where(sql`substr(ae.occurred_at, 1, 10)`, "=", date)
     .orderBy("ae.occurred_at", "desc")
+    .execute();
+}
+
+export async function listEventsForEmployeeInRange(input: {
+  employeeId: string;
+  dateStart?: string;
+  dateEnd?: string;
+  limit?: number;
+}) {
+  let query = db
+    .selectFrom("activity_events as ae")
+    .leftJoin("employees as e", "e.id", "ae.employee_id")
+    .select([
+      "ae.id",
+      "ae.source",
+      "ae.action_type",
+      "ae.entity_type",
+      "ae.entity_id",
+      "ae.entity_title",
+      "ae.occurred_at",
+      "ae.summary",
+      "ae.project_name",
+      "e.display_name as employee_name",
+    ])
+    .where("ae.employee_id", "=", input.employeeId);
+
+  if (input.dateStart) {
+    query = query.where("ae.occurred_at", ">=", `${input.dateStart}T00:00:00Z`);
+  }
+  if (input.dateEnd) {
+    query = query.where("ae.occurred_at", "<=", `${input.dateEnd}T23:59:59Z`);
+  }
+
+  return await query
+    .orderBy("ae.occurred_at", "desc")
+    .limit(input.limit ?? 50)
     .execute();
 }
 
@@ -133,5 +171,38 @@ export async function listEmployeesWithoutActivityForDay(date: string) {
       ),
     )
     .orderBy("e.display_name", "asc")
+    .execute();
+}
+
+export async function listMentionsForUser(input: {
+  employeeName: string;
+  dateStart?: string;
+  dateEnd?: string;
+  limit?: number;
+}) {
+  let query = db
+    .selectFrom("activity_events as ae")
+    .leftJoin("employees as e", "e.id", "ae.employee_id")
+    .select([
+      "ae.id",
+      "ae.action_type",
+      "ae.entity_title",
+      "ae.occurred_at",
+      "ae.summary",
+      "e.display_name as author_name",
+    ])
+    .where("ae.action_type", "=", "CREATE_COMMENT")
+    .where("ae.summary", "like", `%@${input.employeeName}%`);
+
+  if (input.dateStart) {
+    query = query.where("ae.occurred_at", ">=", `${input.dateStart}T00:00:00Z`);
+  }
+  if (input.dateEnd) {
+    query = query.where("ae.occurred_at", "<=", `${input.dateEnd}T23:59:59Z`);
+  }
+
+  return await query
+    .orderBy("ae.occurred_at", "desc")
+    .limit(input.limit ?? 20)
     .execute();
 }

@@ -1,5 +1,6 @@
 export type ActivitySource =
   | "blue"
+  | "blue_webhook"
   | "bot"
   | "web"
   | "whatsapp"
@@ -14,6 +15,7 @@ export type IntentName =
   | "activity.employee_report"
   | "activity.record_report"
   | "activity.workspace_report"
+  | "assignments.report"
   | "records.exception_report"
   | "records.list_assigned"
   | "records.follow_up"
@@ -21,9 +23,13 @@ export type IntentName =
   | "records.detail"
   | "records.create"
   | "records.move"
+  | "records.assign"
+  | "tasks.assign"
   | "comments.list_recent"
   | "comments.create"
   | "activity.list"
+  | "activity.mentions"
+  | "activity.user_history"
   | "summary.employee_day"
   | "summary.team_day"
   | "summary.no_activity_day"
@@ -46,6 +52,7 @@ export interface BlueRequestAuth {
 export interface IntentRequest {
   actor: EmployeeIdentity;
   message: string;
+  originalMessage?: string;
   nowIso: string;
 }
 
@@ -64,6 +71,8 @@ export interface IntentPlan extends IntentMatch {
 export interface NormalizedActivityEvent {
   id: string;
   employeeId?: string;
+  workspaceId?: string;
+  projectName?: string;
   source: ActivitySource;
   sourceEventId?: string;
   actionType: string;

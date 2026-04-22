@@ -26,7 +26,14 @@ interface IntentCandidate {
 export function planEmployeeIntent(
   request: IntentPlannerRequest,
 ): IntentPlan | null {
-  const candidates = INTENT_RESOLVERS.map((resolver) => resolver(request)).filter(
+  const preparedMessage = normalizeIntentMessage(request.message);
+  const preparedRequest: IntentPlannerRequest = {
+    ...request,
+    message: preparedMessage,
+    originalMessage: request.message.trim(),
+  };
+
+  const candidates = INTENT_RESOLVERS.map((resolver) => resolver(preparedRequest)).filter(
     (candidate): candidate is IntentCandidate => Boolean(candidate),
   );
 
@@ -70,6 +77,7 @@ const INTENT_RESOLVERS: Array<
   (request: IntentPlannerRequest) => IntentCandidate | null
 > = [
   resolveIdentityIntent,
+  resolveMentionsIntent,
   resolveReportingOverviewIntent,
   resolveReportingQuestionIntent,
   resolveWorkspaceActivityIntent,
@@ -78,11 +86,13 @@ const INTENT_RESOLVERS: Array<
   resolveEmployeeActivityIntent,
   resolveRecordActivityIntent,
   resolveEmployeeSummaryIntent,
+  resolveAssignmentReportIntent,
   resolveExceptionReportIntent,
   resolveFollowUpIntent,
   resolveWorkloadIntent,
   resolveCommentCreateIntent,
   resolveCommentListIntent,
+  resolveAssignIntent,
   resolveMoveIntent,
   resolveCreateIntent,
   resolveFocusedDetailIntent,
@@ -146,7 +156,7 @@ function resolveReportingQuestionIntent(
     88,
     0.82,
     {
-      question: request.message.trim(),
+      question: (request.originalMessage ?? request.message).trim(),
     },
     ["reporting:question"],
   );
@@ -169,6 +179,28 @@ function resolveTeamSummaryIntent(
   const target = employeeMatch?.[1]?.trim();
   if (target && TEAM_TARGETS.has(target)) {
     return candidate("summary.team_day", 90, 0.86, {}, ["summary:team"]);
+  }
+
+  return null;
+}
+
+function resolveMentionsIntent(
+  request: IntentPlannerRequest,
+): IntentCandidate | null {
+  const rawMessage = request.message.trim();
+  if (
+    /who (?:mentioned|tagged) me/i.test(rawMessage) ||
+    /show(?: me)? (?:my )?mentions/i.test(rawMessage)
+  ) {
+    return candidate(
+      "activity.mentions",
+      96,
+      0.92,
+      {
+        ...resolveActivityDateRangeFromMessage(rawMessage, request.nowIso),
+      },
+      ["activity:mentions"],
+    );
   }
 
   return null;
@@ -255,6 +287,27 @@ function resolveWorkspaceActivityIntent(
       },
       ["activity:workspace:creates"],
     );
+  }
+
+  const historyMatch =
+    activityMatch(rawMessage, String.raw`^(?:what is the )?(?:work )?history for\s+(.+?)`) ||
+    activityMatch(rawMessage, String.raw`^(?:show(?: me)? )?(?:the )?audit trail for\s+(.+?)`) ||
+    activityMatch(rawMessage, String.raw`^(?:what has|what did)\s+(.+?)\s+been working on`);
+
+  if (historyMatch) {
+    const employeeName = historyMatch[1]?.trim();
+    if (employeeName && !TEAM_TARGETS.has(normalize(employeeName))) {
+      return candidate(
+        "activity.user_history",
+        96,
+        0.92,
+        {
+          employeeName: normalizeEmployeeTarget(employeeName, request),
+          ...dateRange,
+        },
+        ["activity:user:history"],
+      );
+    }
   }
 
   if (
@@ -613,6 +666,50 @@ function resolveExceptionReportIntent(
   );
 }
 
+function resolveAssignmentReportIntent(
+  request: IntentPlannerRequest,
+): IntentCandidate | null {
+  const rawMessage = request.message.trim();
+  const message = normalize(rawMessage);
+  const referencesAssignments =
+    /\b(assignments?|checklist items?|checklist tasks?|tasks assigned|assigned tasks?)\b/.test(
+      message,
+    );
+  const asksForAssignmentReport =
+    /\b(what|show|which|list|who|have|has|did|completed?|done|open|pending|todo|to do|see|view)\b/.test(
+      message,
+    );
+  const asksAboutAssignmentTooling =
+    /\b(assignments?\s+tab|assignments?\s+tool|checklist\s+tab|checklist\s+tool)\b/.test(
+      message,
+    );
+
+  if (
+    !referencesAssignments ||
+    (!asksForAssignmentReport && !asksAboutAssignmentTooling)
+  ) {
+    return null;
+  }
+
+  const employeeTarget = resolveAssignmentEmployeeTarget(rawMessage, request);
+  const status = resolveAssignmentStatus(message);
+
+  return candidate(
+    "assignments.report",
+    94,
+    0.9,
+    {
+      assignmentStatus: status,
+      employeeName: employeeTarget,
+    },
+    [
+      "assignments:report",
+      `assignments:report:${status}`,
+      employeeTarget ? "assignments:report:employee" : "assignments:report:self",
+    ],
+  );
+}
+
 function resolveWorkloadIntent(
   request: IntentPlannerRequest,
 ): IntentCandidate | null {
@@ -623,11 +720,12 @@ function resolveWorkloadIntent(
     message.includes("my open files")
   ) {
     return candidate(
-      "records.list_assigned",
+      "assignments.report",
       92,
       0.88,
       {
-        assigneeId: request.actor.blueUserId,
+        employeeName: request.actor.displayName,
+        assignmentStatus: "open",
       },
       ["workload:self"],
     );
@@ -637,7 +735,7 @@ function resolveWorkloadIntent(
   if (workingOnMatch) {
     const target = workingOnMatch[1].trim();
     return candidate(
-      "records.list_assigned",
+      "assignments.report",
       87,
       0.84,
       {
@@ -645,6 +743,7 @@ function resolveWorkloadIntent(
           target === "i" || target === "me"
             ? request.actor.displayName
             : workingOnMatch[1].trim(),
+        assignmentStatus: "open",
       },
       ["workload:employee"],
     );
@@ -935,6 +1034,94 @@ function resolveMoveIntent(
     },
     [useActiveRecordContext ? "records:move:context" : "records:move"],
   );
+}
+
+function resolveAssignIntent(
+  request: IntentPlannerRequest,
+): IntentCandidate | null {
+  const rawMessage = request.message.trim();
+
+  // "assign (task) X to Y"
+  const assignMatch = rawMessage.match(
+    /^(?:assign|give)\s+(task\s+)?(.+?)\s+to\s+(.+?)[.?!]?$/i,
+  );
+
+  if (!assignMatch) {
+    return null;
+  }
+
+  const isTask = Boolean(assignMatch[1]);
+  const rawEntityQuery = assignMatch[2]?.trim();
+  const entityQuery = normalizeAssignmentEntityQuery(rawEntityQuery, isTask);
+  const assigneeName = assignMatch[3]?.trim();
+  const useActiveRecordContext = isContextPointer(rawEntityQuery);
+
+  const intent = isTask ? "tasks.assign" : "records.assign";
+
+  if (!assigneeName) {
+    return candidate(
+      intent,
+      83,
+      0.75,
+      {
+        ...(useActiveRecordContext ? { useActiveRecordContext: true } : {}),
+        entityQuery: useActiveRecordContext ? undefined : entityQuery,
+      },
+      [`${intent}:no_assignee`],
+      "Who should I assign this to?",
+    );
+  }
+
+  if ((!entityQuery || useActiveRecordContext) && !request.hasActiveRecordContext) {
+    return candidate(
+      intent,
+      85,
+      0.76,
+      {
+        assigneeName,
+        ...(useActiveRecordContext ? { useActiveRecordContext: true } : {}),
+      },
+      [`${intent}:no_record`],
+      `Which ${isTask ? "task" : "client"} should I assign to ${assigneeName}?`,
+    );
+  }
+
+  return candidate(
+    intent,
+    86,
+    0.78,
+    {
+      assigneeName,
+      ...(useActiveRecordContext
+        ? { useActiveRecordContext: true }
+        : { entityQuery }),
+    },
+    [useActiveRecordContext ? `${intent}:context` : intent],
+  );
+}
+
+function normalizeAssignmentEntityQuery(
+  value: string | undefined,
+  isTask: boolean,
+) {
+  if (!value) {
+    return value;
+  }
+
+  let normalized = value.trim();
+  if (isTask) {
+    normalized = normalized
+      .replace(/^(?:the\s+)?task\s+/i, "")
+      .replace(/\s+task$/i, "")
+      .trim();
+  } else {
+    normalized = normalized
+      .replace(/^(?:the\s+)?(?:client|record|file|lead)\s+/i, "")
+      .replace(/\s+(?:client|record|file|lead)$/i, "")
+      .trim();
+  }
+
+  return normalized || value.trim();
 }
 
 function resolveCreateIntent(
@@ -1400,6 +1587,41 @@ function resolveExceptionFocus(message: string) {
   return "all";
 }
 
+function resolveAssignmentStatus(message: string) {
+  if (/\b(completed?|done|finished|did)\b/.test(message)) {
+    return "completed";
+  }
+
+  if (/\b(all|everything)\b/.test(message)) {
+    return "all";
+  }
+
+  return "open";
+}
+
+function resolveAssignmentEmployeeTarget(
+  rawMessage: string,
+  request: IntentPlannerRequest,
+) {
+  const message = normalize(rawMessage);
+  if (/\b(my|me|i have|i need|am i assigned)\b/.test(message)) {
+    return request.actor.displayName;
+  }
+
+  const match =
+    rawMessage.match(/\b(?:for|assigned to|does|did)\s+(.+?)(?:\s+(?:have|has|need|completed?|done|open|pending|to do|assignments?|tasks?)\b|[.?!]?$)/i)
+      ?.[1]
+      ?.trim() ??
+    rawMessage.match(/^(.+?)'s\s+(?:assignments?|tasks?|checklist items?)/i)?.[1]?.trim() ??
+    rawMessage.match(/\bwhat\s+(?:assignments?|tasks?)\s+(?:does|did)\s+(.+?)\s+(?:have|complete|do)/i)?.[1]?.trim();
+
+  if (!match || TEAM_TARGETS.has(normalize(match))) {
+    return request.actor.displayName;
+  }
+
+  return normalizeEmployeeTarget(match, request);
+}
+
 function isAdminSelfNameReference(
   value: string,
   request: IntentPlannerRequest,
@@ -1472,6 +1694,26 @@ function buildRecordActivityCandidate(
 
 function normalize(input: string) {
   return input.trim().toLowerCase();
+}
+
+function normalizeIntentMessage(input: string) {
+  let message = input.trim();
+  if (!message) {
+    return message;
+  }
+
+  let previous = "";
+  while (message && message !== previous) {
+    previous = message;
+    message = message
+      .replace(/^(?:aya|hey aya|hi aya|hello aya)[\s,:-]*/i, "")
+      .replace(/^(?:please\s+)?(?:can|could|would|will)\s+you\s+/i, "")
+      .replace(/^please\s+/i, "")
+      .replace(/^(?:help me(?:\s+to)?|i need you to|do me a favor and)\s+/i, "")
+      .trim();
+  }
+
+  return message.replace(/\s+(?:please|pls)\s*([.?!])?$/i, "$1").trim();
 }
 
 const SELF_IDENTITY_MESSAGES = new Set([

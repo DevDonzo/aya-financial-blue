@@ -73,6 +73,8 @@ export interface BlueRecordsCacheTable {
 export interface ActivityEventsTable {
   id: string;
   employee_id: string | null;
+  workspace_id: string | null;
+  project_name: string | null;
   source: string;
   source_event_id: string | null;
   action_type: string;

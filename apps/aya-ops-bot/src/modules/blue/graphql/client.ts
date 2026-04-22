@@ -6,6 +6,7 @@ import type {
   BlueActivityEvent,
   BlueDashboard,
   BlueComment,
+  BlueChecklistItem,
   BlueCompanyPlan,
   BluePageInfo,
   BlueReportingCapability,
@@ -436,11 +437,26 @@ export async function fetchRecordDetail(workspaceId: string, recordId: string) {
             id
             uid
             title
-            position
             updatedAt
-          }
-        }
-        commentList(categoryId: $recordId, category: TODO, first: 12, orderBy: updatedAt_DESC) {
+            }
+            }
+            checklists {
+            id
+            title
+            items {
+            id
+            uid
+            title
+            done
+            users {
+              id
+              fullName
+              email
+            }
+            }
+            }
+            }
+            commentList(categoryId: $recordId, category: TODO, first: 12, orderBy: updatedAt_DESC) {
           comments {
             id
             uid
@@ -476,7 +492,7 @@ export async function fetchRecordDetail(workspaceId: string, recordId: string) {
 }
 
 export async function fetchWorkspaceActivity(input: {
-  workspaceId: string;
+  workspaceId?: string;
   limit: number;
   startDate?: string | null;
 }) {
@@ -487,7 +503,7 @@ export async function fetchWorkspaceActivity(input: {
     };
   }>(
     `
-      query ActivityList($projectId: String!, $first: Int!, $startDate: DateTime) {
+      query ActivityList($projectId: String, $first: Int!, $startDate: DateTime) {
         activityList(projectId: $projectId, first: $first, startDate: $startDate, orderBy: createdAt_DESC) {
           activities {
             id
@@ -540,11 +556,11 @@ export async function fetchWorkspaceActivity(input: {
       }
     `,
     {
-      projectId: input.workspaceId,
+      projectId: input.workspaceId ?? null,
       first: input.limit,
       startDate: input.startDate ?? null,
     },
-    { projectId: input.workspaceId },
+    input.workspaceId ? { projectId: input.workspaceId } : undefined,
   );
 
   return data.activityList.activities;
@@ -1118,6 +1134,64 @@ export async function setTodoCustomField(input: {
   return data.setTodoCustomField;
 }
 
+export async function setTodoAssignees(input: {
+  workspaceId: string;
+  todoId: string;
+  assigneeIds: string[];
+  auth?: BlueRequestAuth | null;
+}) {
+  const data = await blueGraphqlRequest<{
+    setTodoAssignees: {
+      success: boolean;
+      operationId?: string | null;
+    };
+  }>(
+    `
+      mutation SetTodoAssignees($input: SetTodoAssigneesInput!) {
+        setTodoAssignees(input: $input) {
+          success
+          operationId
+        }
+      }
+    `,
+    {
+      input: {
+        todoId: input.todoId,
+        assigneeIds: input.assigneeIds,
+      },
+    },
+    { projectId: input.workspaceId, auth: input.auth },
+  );
+
+  return data.setTodoAssignees.success;
+}
+
+export async function setChecklistItemAssignees(input: {
+  workspaceId: string;
+  todoChecklistItemId: string;
+  assigneeIds: string[];
+  auth?: BlueRequestAuth | null;
+}) {
+  const data = await blueGraphqlRequest<{
+    setChecklistItemAssignees: boolean;
+  }>(
+    `
+      mutation SetChecklistItemAssignees($input: SetChecklistItemAssigneesInput!) {
+        setChecklistItemAssignees(input: $input)
+      }
+    `,
+    {
+      input: {
+        todoChecklistItemId: input.todoChecklistItemId,
+        assigneeIds: input.assigneeIds,
+      },
+    },
+    { projectId: input.workspaceId, auth: input.auth },
+  );
+
+  return data.setChecklistItemAssignees;
+}
+
 export async function createLeadRecord(input: {
   workspaceId: string;
   listId: string;
@@ -1367,7 +1441,7 @@ export async function createComment(input: {
 }
 
 export async function listAssignedOpenRecords(input: {
-  workspaceId: string;
+  workspaceId?: string;
   companyId: string;
   assigneeId: string;
   limit?: number;
@@ -1463,15 +1537,109 @@ export async function listAssignedOpenRecords(input: {
     `,
     {
       companyIds: [input.companyId],
-      projectIds: [input.workspaceId],
+      projectIds: input.workspaceId ? [input.workspaceId] : undefined,
       assigneeIds: [input.assigneeId],
       limit: input.limit ?? 50,
       skip: input.skip ?? 0,
     },
-    { projectId: input.workspaceId },
+    input.workspaceId ? { projectId: input.workspaceId } : undefined,
   );
 
   return data.todoQueries.todos;
+}
+
+export async function listAssignedChecklistItems(input: {
+  workspaceId?: string;
+  assigneeId: string;
+  done?: boolean;
+  todoDone?: boolean;
+  limit?: number;
+  skip?: number;
+}) {
+  const filter: Record<string, unknown> = {
+    assigneeIds: [input.assigneeId],
+    excludeArchivedProjects: true,
+  };
+
+  if (input.done != null) {
+    filter.done = input.done;
+  }
+  if (input.todoDone != null) {
+    filter.todoDone = input.todoDone;
+  }
+
+  const data = await blueGraphqlRequest<{
+    checklistItems: {
+      items: BlueChecklistItem[];
+      pageInfo: {
+        totalItems?: number | null;
+        hasNextPage?: boolean | null;
+        hasPreviousPage?: boolean | null;
+        page?: number | null;
+        perPage?: number | null;
+      };
+    };
+  }>(
+    `
+      query AssignedChecklistItems(
+        $filter: ChecklistItemFilterInput!,
+        $take: Int,
+        $skip: Int
+      ) {
+        checklistItems(filter: $filter, take: $take, skip: $skip) {
+          items {
+            id
+            uid
+            title
+            done
+            duedAt
+            updatedAt
+            users {
+              id
+              uid
+              email
+              firstName
+              lastName
+              fullName
+              timezone
+              updatedAt
+            }
+            checklist {
+              id
+              title
+              todo {
+                id
+                uid
+                title
+                todoList {
+                  id
+                  uid
+                  title
+                  position
+                  updatedAt
+                }
+              }
+            }
+          }
+          pageInfo {
+            totalItems
+            hasNextPage
+            hasPreviousPage
+            page
+            perPage
+          }
+        }
+      }
+    `,
+    {
+      filter,
+      take: input.limit ?? 50,
+      skip: input.skip ?? 0,
+    },
+    input.workspaceId ? { projectId: input.workspaceId } : undefined,
+  );
+
+  return data.checklistItems;
 }
 
 export async function checkBlueApiConnectivity(workspaceId: string) {

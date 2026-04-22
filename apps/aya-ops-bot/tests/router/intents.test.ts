@@ -26,9 +26,10 @@ describe("detectIntent", () => {
     });
 
     expect(result).toMatchObject({
-      intent: "records.list_assigned",
+      intent: "assignments.report",
       parameters: {
-        assigneeId: "emp_1",
+        employeeName: "Hamza Paracha",
+        assignmentStatus: "open",
       },
     });
   });
@@ -48,6 +49,57 @@ describe("detectIntent", () => {
     });
   });
 
+  it("maps self assignment requests to checklist assignment reporting", () => {
+    const result = planEmployeeIntent({
+      actor,
+      message: "what are my assignments",
+      nowIso: fixedNowIso,
+    });
+
+    expect(result).toMatchObject({
+      intent: "assignments.report",
+      parameters: {
+        assignmentStatus: "open",
+        employeeName: "Hamza Paracha",
+      },
+      requiresClarification: false,
+    });
+  });
+
+  it("maps assignment tab/tool phrasing to checklist assignment reporting", () => {
+    const result = planEmployeeIntent({
+      actor,
+      message: "is there an assignments tab or tool to see my assignments",
+      nowIso: fixedNowIso,
+    });
+
+    expect(result).toMatchObject({
+      intent: "assignments.report",
+      parameters: {
+        assignmentStatus: "open",
+        employeeName: "Hamza Paracha",
+      },
+      requiresClarification: false,
+    });
+  });
+
+  it("maps admin completed assignment requests to another employee", () => {
+    const result = planEmployeeIntent({
+      actor: adminActor,
+      message: "what assignments did Sarah complete",
+      nowIso: fixedNowIso,
+    });
+
+    expect(result).toMatchObject({
+      intent: "assignments.report",
+      parameters: {
+        assignmentStatus: "completed",
+        employeeName: "Sarah",
+      },
+      requiresClarification: false,
+    });
+  });
+
   it("matches move commands", () => {
     const result = detectIntent({
       actor,
@@ -61,6 +113,75 @@ describe("detectIntent", () => {
         recordQuery: "sheraz",
         targetListQuery: "0.2",
       },
+    });
+  });
+
+  it("normalizes assignment entity phrasing with generic client words", () => {
+    const result = planEmployeeIntent({
+      actor,
+      message: "assign the client aya qa lead to sarah",
+      nowIso: fixedNowIso,
+    });
+
+    expect(result).toMatchObject({
+      intent: "records.assign",
+      parameters: {
+        entityQuery: "aya qa",
+        assigneeName: "sarah",
+      },
+      requiresClarification: false,
+    });
+  });
+
+  it("handles polite assignment phrasing without losing intent", () => {
+    const result = planEmployeeIntent({
+      actor,
+      message: "hey aya, can you please assign the client aya qa lead to sarah?",
+      nowIso: fixedNowIso,
+    });
+
+    expect(result).toMatchObject({
+      intent: "records.assign",
+      parameters: {
+        entityQuery: "aya qa",
+        assigneeName: "sarah",
+      },
+      requiresClarification: false,
+    });
+  });
+
+  it("handles polite mention requests", () => {
+    const result = planEmployeeIntent({
+      actor,
+      message: "please can you show my mentions from today?",
+      nowIso: fixedNowIso,
+    });
+
+    expect(result).toMatchObject({
+      intent: "activity.mentions",
+      parameters: {
+        dateStart: "2026-04-09",
+        dateEnd: "2026-04-09",
+        dateLabel: "today",
+      },
+      requiresClarification: false,
+    });
+  });
+
+  it("handles polite workload phrasing", () => {
+    const result = planEmployeeIntent({
+      actor,
+      message: "could you tell me what am i working on?",
+      nowIso: fixedNowIso,
+    });
+
+    expect(result).toMatchObject({
+      intent: "assignments.report",
+      parameters: {
+        assignmentStatus: "open",
+        employeeName: "Hamza Paracha",
+      },
+      requiresClarification: false,
     });
   });
 

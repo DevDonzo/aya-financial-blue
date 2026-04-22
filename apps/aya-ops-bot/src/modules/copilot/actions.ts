@@ -8,6 +8,8 @@ import {
   listBotAuditLogsForEmployeeDay,
   listBotAuditLogsInRange,
   listCachedBlueRecordsForInspection,
+  listEventsForEmployeeInRange,
+  listMentionsForUser,
 } from "../../db.js";
 import {
   getIndexedRecord,
@@ -18,12 +20,16 @@ import {
 } from "../../blue/workspace-index.js";
 import { config } from "../../config.js";
 import type { BlueRequestAuth, EmployeeIdentity } from "../../domain/types.js";
-import type { BluePageInfo, BlueRecord } from "../../types/blue.js";
+import type { BlueChecklistItem, BluePageInfo, BlueRecord } from "../../types/blue.js";
 import {
   createComment,
   createLeadRecord,
+  fetchRecordDetail,
+  listAssignedChecklistItems,
   listAssignedOpenRecords,
   moveRecord,
+  setTodoAssignees,
+  setChecklistItemAssignees,
 } from "../blue/graphql/client.js";
 import { resolveBlueWriteAuth } from "../blue/request-auth.js";
 import {
@@ -403,6 +409,37 @@ export async function getEmployeeWorkload(input: {
   };
 }
 
+export async function getEmployeeAssignmentReport(input: {
+  employeeId?: string;
+  employeeEmail?: string;
+  employeeName?: string;
+  status?: "open" | "completed" | "all";
+  transport?: string;
+}) {
+  const actor = await resolveActorOrThrow(input);
+  const status = input.status ?? "open";
+  const { items, pageInfo } = await loadAssignedChecklistItems(
+    actor.employeeId,
+    status,
+  );
+  const responseText = buildAssignmentReportResponseText({
+    employeeName: actor.displayName,
+    status,
+    items,
+    totalItems: pageInfo.totalItems ?? items.length,
+    hasNextPage: pageInfo.hasNextPage,
+  });
+
+  return {
+    employeeId: actor.employeeId,
+    employeeName: actor.displayName,
+    status,
+    responseText,
+    items,
+    pageInfo,
+  };
+}
+
 export async function getEmployeeFollowUpQueue(input: {
   employeeId?: string;
   employeeEmail?: string;
@@ -615,6 +652,123 @@ export async function createClientRecord(input: {
   };
 }
 
+export async function assignRecord(input: {
+  recordId?: string;
+  entityQuery?: string;
+  assigneeName: string;
+  useActiveRecordContext?: boolean;
+  actor?: EmployeeIdentity | null;
+  blueAuth?: BlueRequestAuth | null;
+  transport?: string;
+}) {
+  const writeAuth = resolveBlueWriteAuth(input.blueAuth);
+  const record = await resolveRecordOrThrow({
+    query: input.entityQuery,
+    fieldName: "entityQuery",
+    actor: input.actor ?? null,
+    transport: input.transport ?? "mcp",
+    continuationAction: "records.assign",
+    pendingParameters: {
+      assigneeName: input.assigneeName,
+    },
+    useActiveRecordContext: input.useActiveRecordContext,
+  });
+
+  const assignee = await resolveActorIdentityService({
+    employeeName: input.assigneeName,
+    transport: input.transport ?? "mcp",
+  });
+
+  await executeBlueWrite(() =>
+    setTodoAssignees({
+      workspaceId: config.BLUE_WORKSPACE_ID,
+      todoId: record.id,
+      assigneeIds: [assignee.employeeId],
+      auth: writeAuth,
+    }),
+  );
+
+  return {
+    ok: true,
+    recordId: record.id,
+    recordTitle: record.title,
+    assigneeId: assignee.employeeId,
+    assigneeName: assignee.displayName,
+    responseText: `Assigned ${record.title} to ${assignee.displayName}.`,
+  };
+}
+
+export async function assignTask(input: {
+  recordId?: string;
+  entityQuery?: string;
+  assigneeName: string;
+  useActiveRecordContext?: boolean;
+  actor?: EmployeeIdentity | null;
+  blueAuth?: BlueRequestAuth | null;
+  transport?: string;
+}) {
+  const writeAuth = resolveBlueWriteAuth(input.blueAuth);
+  const record = await resolveRecordOrThrow({
+    query: input.entityQuery,
+    fieldName: "entityQuery",
+    actor: input.actor ?? null,
+    transport: input.transport ?? "mcp",
+    continuationAction: "tasks.assign",
+    pendingParameters: {
+      assigneeName: input.assigneeName,
+    },
+    useActiveRecordContext: input.useActiveRecordContext,
+  });
+
+  const assignee = await resolveActorIdentityService({
+    employeeName: input.assigneeName,
+    transport: input.transport ?? "mcp",
+  });
+
+  // Load record detail to find the checklist item
+  const detail = await fetchRecordDetail(config.BLUE_WORKSPACE_ID, record.id);
+  const checklists = detail.record?.checklists ?? [];
+  let targetItem: { id: string; title: string } | null = null;
+
+  // Simple heuristic: search for item by name in all checklists
+  for (const checklist of checklists) {
+    for (const item of checklist.items) {
+      if (
+        item.title.toLowerCase().includes(input.entityQuery?.toLowerCase() || "")
+      ) {
+        targetItem = item;
+        break;
+      }
+    }
+    if (targetItem) break;
+  }
+
+  if (!targetItem) {
+    throw new ValidationError(
+      `Could not find a task matching "${input.entityQuery}" in ${record.title}.`,
+    );
+  }
+
+  await executeBlueWrite(() =>
+    setChecklistItemAssignees({
+      workspaceId: config.BLUE_WORKSPACE_ID,
+      todoChecklistItemId: targetItem.id,
+      assigneeIds: [assignee.employeeId],
+      auth: writeAuth,
+    }),
+  );
+
+  return {
+    ok: true,
+    recordId: record.id,
+    taskId: targetItem.id,
+    taskTitle: targetItem.title,
+    assigneeId: assignee.employeeId,
+    assigneeName: assignee.displayName,
+    responseText: `Assigned task "${targetItem.title}" to ${assignee.displayName}.`,
+  };
+}
+
 export async function resolveActorOrThrow(input: {
   employeeId?: string;
   employeeEmail?: string;
@@ -645,6 +799,20 @@ type WorkloadItem = {
   commentCount: number;
   done: boolean;
   archived: boolean;
+};
+
+type AssignmentItem = {
+  id: string;
+  type: "checklist" | "record";
+  title: string;
+  done: boolean;
+  dueAt: string | null;
+  updatedAt: string | null;
+  assigneeNames: string[];
+  checklistTitle: string;
+  recordId: string;
+  recordTitle: string;
+  listTitle: string;
 };
 
 type FollowUpPriorityItem = WorkloadItem & {
@@ -889,6 +1057,74 @@ async function loadAssignedOpenRecords(
   };
 }
 
+async function loadAssignedChecklistItems(
+  assigneeId: string,
+  status: "open" | "completed" | "all",
+): Promise<{ items: AssignmentItem[]; pageInfo: BluePageInfo }> {
+  const [checklistResult, recordsResult] = await Promise.all([
+    listAssignedChecklistItems({
+      workspaceId: config.BLUE_WORKSPACE_ID,
+      assigneeId,
+      done:
+        status === "open"
+          ? false
+          : status === "completed"
+            ? true
+            : undefined,
+      todoDone: status === "open" ? false : undefined,
+      limit: 50,
+      skip: 0,
+    }),
+    status !== "completed"
+      ? listAssignedOpenRecords({
+          workspaceId: config.BLUE_WORKSPACE_ID,
+          companyId: config.BLUE_COMPANY_ID,
+          assigneeId,
+          limit: 50,
+          skip: 0,
+        })
+      : Promise.resolve({
+          items: [] as BlueRecord[],
+          pageInfo: {
+            totalItems: 0,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            page: 1,
+            perPage: 50,
+          },
+        }),
+  ]);
+
+  const items: AssignmentItem[] = [
+    ...checklistResult.items.map(toAssignmentItem),
+    ...(recordsResult.items as BlueRecord[]).map(toAssignmentItemFromRecord),
+  ];
+
+  // Sort by updatedAt descending
+  items.sort((a, b) => {
+    const da = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+    const db = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+    return db - da;
+  });
+
+  const totalItems =
+    (checklistResult.pageInfo.totalItems ?? 0) +
+    (recordsResult.pageInfo.totalItems ?? 0);
+
+  return {
+    items,
+    pageInfo: {
+      hasNextPage:
+        Boolean(checklistResult.pageInfo.hasNextPage) ||
+        Boolean(recordsResult.pageInfo.hasNextPage),
+      hasPreviousPage:
+        Boolean(checklistResult.pageInfo.hasPreviousPage) ||
+        Boolean(recordsResult.pageInfo.hasPreviousPage),
+      totalItems,
+    },
+  };
+}
+
 function toWorkloadItem(item: BlueRecord): WorkloadItem {
   return {
     id: item.id,
@@ -901,6 +1137,90 @@ function toWorkloadItem(item: BlueRecord): WorkloadItem {
     done: item.done,
     archived: item.archived,
   };
+}
+
+function toAssignmentItem(item: BlueChecklistItem): AssignmentItem {
+  return {
+    id: item.id,
+    type: "checklist",
+    title: item.title,
+    done: item.done,
+    dueAt: item.duedAt ?? null,
+    updatedAt: item.updatedAt ?? null,
+    assigneeNames:
+      item.users?.map((user) => user.fullName || user.email).filter(Boolean) ??
+      [],
+    checklistTitle: item.checklist.title,
+    recordId: item.checklist.todo.id,
+    recordTitle: item.checklist.todo.title,
+    listTitle: item.checklist.todo.todoList.title,
+  };
+}
+
+function toAssignmentItemFromRecord(item: BlueRecord): AssignmentItem {
+  return {
+    id: item.id,
+    type: "record",
+    title: item.title,
+    done: item.done,
+    dueAt: item.duedAt ?? null,
+    updatedAt: item.updatedAt ?? null,
+    assigneeNames:
+      item.users?.map((user) => user.fullName || user.email).filter(Boolean) ??
+      [],
+    checklistTitle: "Main Record",
+    recordId: item.id,
+    recordTitle: item.title,
+    listTitle: item.todoList.title,
+  };
+}
+
+function buildAssignmentReportResponseText(input: {
+  employeeName: string;
+  status: "open" | "completed" | "all";
+  items: AssignmentItem[];
+  totalItems: number;
+  hasNextPage: boolean;
+}) {
+  const statusLabel =
+    input.status === "open"
+      ? "open assignment"
+      : input.status === "completed"
+        ? "completed assignment"
+        : "assignment";
+
+  if (input.items.length === 0) {
+    return `${input.employeeName} has no ${statusLabel}s in Blue right now.`;
+  }
+
+  return [
+    `${input.employeeName} has ${input.totalItems} ${statusLabel}${
+      input.totalItems === 1 ? "" : "s"
+    } in Blue.`,
+    ...input.items.slice(0, 15).map((item, index) => {
+      const state = item.done ? "completed" : "open";
+      const typeLabel = item.type === "record" ? "[Record]" : "[Task]";
+      const date =
+        item.done && item.updatedAt
+          ? `completed/updated ${item.updatedAt.slice(0, 10)}`
+          : item.dueAt
+            ? `due ${item.dueAt.slice(0, 10)}`
+            : "no due date";
+      const assignees =
+        item.assigneeNames.length > 0
+          ? item.assigneeNames.join(", ")
+          : "unassigned";
+
+      return `${index + 1}. ${typeLabel} ${item.title} - ${state}, ${date} | Assigned: ${assignees} | ${item.recordTitle} (${item.listTitle}) ${
+        item.type === "checklist" ? `| Checklist: ${item.checklistTitle}` : ""
+      }`;
+    }),
+    input.hasNextPage
+      ? `Showing the first ${input.items.length} assignments. More are available.`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function buildFollowUpPriorityQueue(
@@ -1031,4 +1351,77 @@ function sortByDate(left: string | null, right: string | null) {
   }
 
   return 0;
+}
+
+export async function getUserMentionsReport(input: {
+  employeeName?: string;
+  dateStart?: string;
+  dateEnd?: string;
+  actor?: EmployeeIdentity | null;
+}) {
+  const targetName = input.employeeName || input.actor?.displayName;
+  if (!targetName) {
+    throw new ValidationError("I need to know whose mentions to search for.");
+  }
+
+  const rows = await listMentionsForUser({
+    employeeName: targetName,
+    dateStart: input.dateStart,
+    dateEnd: input.dateEnd,
+  });
+
+  const responseText =
+    rows.length === 0
+      ? `No recent mentions found for ${targetName}.`
+      : [
+          `Recent mentions for ${targetName}:`,
+          ...rows.map((row, index) => {
+            const date = row.occurred_at.slice(0, 10);
+            const time = row.occurred_at.slice(11, 16);
+            return `${index + 1}. ${row.author_name} mentioned you on "${
+              row.entity_title
+            }" (${date} ${time}):\n   > ${row.summary}`;
+          }),
+        ].join("\n");
+
+  return {
+    employeeName: targetName,
+    rows,
+    responseText,
+  };
+}
+
+export async function getUserActivityHistory(input: {
+  employeeId?: string;
+  employeeEmail?: string;
+  employeeName?: string;
+  dateStart?: string;
+  dateEnd?: string;
+  transport?: string;
+}) {
+  const actor = await resolveActorOrThrow(input);
+  const rows = await listEventsForEmployeeInRange({
+    employeeId: actor.employeeId,
+    dateStart: input.dateStart,
+    dateEnd: input.dateEnd,
+  });
+
+  const responseText =
+    rows.length === 0
+      ? `No activity history found for ${actor.displayName} in this period.`
+      : [
+          `Activity history for ${actor.displayName}:`,
+          ...rows.map((row, index) => {
+            const date = row.occurred_at.slice(0, 10);
+            const time = row.occurred_at.slice(11, 16);
+            const project = row.project_name ? ` [${row.project_name}]` : "";
+            return `${index + 1}. ${date} ${time}: ${row.summary}${project}`;
+          }),
+        ].join("\n");
+
+  return {
+    employeeName: actor.displayName,
+    rows,
+    responseText,
+  };
 }

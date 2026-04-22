@@ -52,6 +52,7 @@ const runtimeEnv = {
     (detectedNodeEnv === "production" ? "false" : "true"),
   BLUE_REPORT_FALLBACK_IDS:
     process.env.BLUE_REPORT_FALLBACK_IDS ?? defaultDemoReportFallbackIds,
+  HOSTINGER_API_KEY: process.env.HOSTINGER_API_KEY,
 };
 
 const configSchema = z.object({
@@ -60,6 +61,7 @@ const configSchema = z.object({
   BLUE_AUTH_TOKEN: z.string().default(""),
   BLUE_CLIENT_ID: z.string().default(""),
   BLUE_COMPANY_ID: z.string().default(""),
+  HOSTINGER_API_KEY: z.string().optional(),
   ALLOW_SYSTEM_BLUE_WRITE_FALLBACK: z
     .string()
     .default(detectedNodeEnv === "production" ? "false" : "true")
