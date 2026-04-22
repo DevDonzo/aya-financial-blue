@@ -438,25 +438,24 @@ export async function fetchRecordDetail(workspaceId: string, recordId: string) {
             uid
             title
             updatedAt
-            }
-            }
-            checklists {
+          }
+          checklists {
             id
             title
             items {
-            id
-            uid
-            title
-            done
-            users {
               id
-              fullName
-              email
+              uid
+              title
+              done
+              users {
+                id
+                fullName
+                email
+              }
             }
-            }
-            }
-            }
-            commentList(categoryId: $recordId, category: TODO, first: 12, orderBy: updatedAt_DESC) {
+          }
+        }
+        commentList(categoryId: $recordId, category: TODO, first: 12, orderBy: updatedAt_DESC) {
           comments {
             id
             uid

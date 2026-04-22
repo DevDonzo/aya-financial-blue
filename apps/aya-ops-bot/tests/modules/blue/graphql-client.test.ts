@@ -199,6 +199,51 @@ const server = setupServer(
       });
     }
 
+    if (body.query.includes("query RecordDetail")) {
+      return HttpResponse.json({
+        data: {
+          todo: {
+            id: "todo_1",
+            uid: "todo_uid_1",
+            title: "Fatima Hammou",
+            text: "",
+            html: "",
+            startedAt: null,
+            duedAt: null,
+            commentCount: 1,
+            archived: false,
+            done: false,
+            createdAt: "2026-03-25T00:00:00.000Z",
+            updatedAt: "2026-03-26T00:00:00.000Z",
+            users: [],
+            tags: [],
+            customFields: [],
+            todoList: {
+              id: "list_1",
+              uid: "list_uid_1",
+              title: "Leads",
+              updatedAt: "2026-03-25T00:00:00.000Z",
+            },
+            checklists: [],
+          },
+          commentList: {
+            comments: [
+              {
+                id: "comment_1",
+                uid: "comment_uid_1",
+                text: "Latest update",
+                html: "<p>Latest update</p>",
+                createdAt: "2026-03-25T00:00:00.000Z",
+                updatedAt: "2026-03-25T00:00:00.000Z",
+                deletedAt: null,
+                user: null,
+              },
+            ],
+          },
+        },
+      });
+    }
+
     if (body.query.includes("query ReportingCapability")) {
       return HttpResponse.json({
         data: {
@@ -502,6 +547,24 @@ describe("blue graphql client mutations and workload query", () => {
         todoDone: false,
       });
       expect((requests[0]?.variables.take as number) ?? 0).toBe(50);
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it("fetches record detail with commentList as a top-level query field", async () => {
+    const env = createTestEnvironment();
+    try {
+      const { fetchRecordDetail } = await import(
+        "../../../src/modules/blue/graphql/client.js"
+      );
+      const result = await fetchRecordDetail("cmn524yr800e101mh7kn44mhf", "todo_1");
+
+      expect(result.record?.title).toBe("Fatima Hammou");
+      expect(result.comments[0]?.text).toBe("Latest update");
+      expect(requests[0]?.query).toContain("query RecordDetail");
+      expect(requests[0]?.query).toMatch(/}\s+commentList\(/);
+      expect(requests[0]?.variables).toEqual({ recordId: "todo_1" });
     } finally {
       env.cleanup();
     }
