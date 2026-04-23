@@ -76,6 +76,7 @@ export default defineConfig(({ command }) => ({
       workbox: {
         globPatterns: [
           '**/*.{js,css,html}',
+          'assets/favicon.svg',
           'assets/favicon*.png',
           'assets/icon-*.png',
           'assets/apple-touch-icon*.png',
@@ -88,12 +89,17 @@ export default defineConfig(({ command }) => ({
       },
       includeAssets: [],
       manifest: {
-        name: 'LibreChat',
-        short_name: 'LibreChat',
+        name: 'AYA Copilot',
+        short_name: 'AYA Copilot',
         display: 'standalone',
-        background_color: '#000000',
-        theme_color: '#009688',
+        background_color: '#12324A',
+        theme_color: '#0F766E',
         icons: [
+          {
+            src: 'assets/favicon.svg',
+            sizes: 'any',
+            type: 'image/svg+xml',
+          },
           {
             src: 'assets/favicon-32x32.png',
             sizes: '32x32',
